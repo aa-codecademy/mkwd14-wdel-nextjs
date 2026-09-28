@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gatherly — end of class 01
 
-## Getting Started
-
-First, run the development server:
+The course application as it stands after class 1: a fresh **Next.js 16** project (App Router, TypeScript, Tailwind CSS v4) with code-quality tooling set up. No Gatherly features yet — those start in class 2.
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📜 Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command                | What it does                                                        |
+| ---------------------- | ------------------------------------------------------------------- |
+| `npm run dev`          | Dev server with hot reload (Turbopack)                              |
+| `npm run build`        | Production build — also type-checks and shows static/dynamic routes |
+| `npm run start`        | Serves the production build (run `build` first)                     |
+| `npm run lint`         | ESLint — finds bugs and bad patterns                                |
+| `npm run lint:fix`     | ESLint, fixing what it can automatically                            |
+| `npm run format`       | Prettier — formats every file                                       |
+| `npm run format:check` | Prettier — only reports unformatted files (used in CI / homework)   |
+| `npm run check`        | Type check + lint + format check. Run before every push.            |
 
-## Learn More
+## 🗂 Project structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+gatherly/
+├── app/                  ← the App Router: folders = URLs
+│   ├── layout.tsx        ← root layout: <html>, <body>, fonts, metadata
+│   ├── page.tsx          ← the "/" route
+│   ├── globals.css       ← Tailwind import + design tokens (@theme)
+│   └── favicon.ico       ← picked up automatically as the site icon
+├── public/               ← static files served as-is: /next.svg → public/next.svg
+├── next.config.ts        ← Next.js options
+├── tsconfig.json         ← TypeScript options; "@/*" import alias
+├── eslint.config.mjs     ← ESLint rules (Next.js + TypeScript presets)
+├── postcss.config.mjs    ← wires Tailwind into the CSS build
+├── .prettier.json        ← Prettier options + Tailwind class sorting
+├── .vscode/settings.json ← format on save, ESLint fix on save, workspace TypeScript
+├── AGENTS.md / CLAUDE.md ← instructions for AI assistants (generated)
+└── package.json          ← dependencies and scripts
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Why these tools?
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **TypeScript** catches mistakes (typos, wrong props, missing `await`) before you run the code.
+- **ESLint** with `eslint-config-next` knows React and Next.js rules — e.g. hooks rules, using `<Image>` / `<Link>`.
+- **Prettier** formats code the same way for everyone, so diffs only show real changes. `prettier-plugin-tailwindcss` sorts Tailwind classes in a consistent order.
+- **`eslint-config-prettier`** turns off ESLint rules that would fight with Prettier.
+- **`.vscode/settings.json`** formats on save and uses the project's TypeScript version rather than the one bundled with VS Code.
+- **`engines.node >= 20.9`** in `package.json` documents the minimum Node.js version Next.js 16 needs.
 
-## Deploy on Vercel
+## 🔗 Links
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [Next.js project structure](https://nextjs.org/docs/app/getting-started/project-structure)
+- [`next` CLI (dev, build, start, typegen)](https://nextjs.org/docs/app/api-reference/cli/next)
+- [ESLint in Next.js](https://nextjs.org/docs/app/api-reference/config/eslint)
+- [Prettier options](https://prettier.io/docs/options) · [prettier-plugin-tailwindcss](https://github.com/tailwindlabs/prettier-plugin-tailwindcss)
+- [Class 01 README](../README.md) — concepts, exercises and more links

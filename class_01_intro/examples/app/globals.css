@@ -1,21 +1,48 @@
+/*
+ * GLOBAL STYLES — imported once in app/layout.tsx, so they apply to every page.
+ */
+
+/*
+ * Tailwind CSS v4: this single import is the whole setup.
+ * There is no `tailwind.config.js` any more — configuration lives in CSS
+ * via `@theme` (below). Tailwind scans your files and generates only the
+ * utility classes you actually use.
+ */
 @import 'tailwindcss';
 
+/* Plain CSS custom properties (variables) for light mode. */
 :root {
 	--background: #ffffff;
 	--foreground: #171717;
 }
 
+/*
+ * `@theme` defines DESIGN TOKENS. Every token in a known namespace becomes
+ * utility classes:
+ *   --color-foo  -> bg-foo, text-foo, border-foo, ...
+ *   --font-foo   -> font-foo
+ *
+ * `inline` means "use the value as-is (a var() reference)". We need it here
+ * because the values point to other variables that change in dark mode.
+ */
 @theme inline {
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
+	/* These variables are created by next/font in app/layout.tsx. */
 	--font-sans: var(--font-geist-sans);
 	--font-mono: var(--font-geist-mono);
 }
 
+/* Our own brand colour -> enables `bg-gatherly`, `text-gatherly`, ... (see /styling). */
 @theme {
 	--color-gatherly: #0089ed;
 }
 
+/*
+ * Dark mode: when the operating system is in dark mode, just swap the
+ * variable values. Every class built on them (bg-background, text-foreground)
+ * updates automatically.
+ */
 @media (prefers-color-scheme: dark) {
 	:root {
 		--background: #0a0a0a;
@@ -23,6 +50,10 @@
 	}
 }
 
+/*
+ * Note: this overrides the Geist font set up in layout.tsx. Remove this rule
+ * (or use the `font-sans` class) to actually see Geist.
+ */
 body {
 	font-family: Arial, Helvetica, sans-serif;
 }

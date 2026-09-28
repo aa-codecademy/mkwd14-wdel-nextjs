@@ -48,7 +48,123 @@ Over the course we build one real application together: **Gatherly**, an event a
 | **ChatGPT**        | [chat.openai.com](https://chat.openai.com/)                        |
 | **Claude**         | [claude.ai](https://claude.ai/)                                    |
 
-*Use **Node.js** and **npm** to install dependencies and run the examples in each class folder: `npm install`, then `npm run dev`.*
+*Use **Node.js** and **npm** to install dependencies and run the examples in each class folder: `npm install`, then `npm run dev`. First time? Follow the [local setup](#-local-setup--step-by-step) below.*
+
+---
+
+## 🖥 Local setup — step by step
+
+Do this once on your machine before class 1. Commands are the same on macOS, Linux and Windows unless noted (on Windows, use **PowerShell** or the VS Code terminal).
+
+### 1. Install Node.js (20.9 or newer)
+
+Next.js runs on Node.js, and `npm` (the package manager) comes with it.
+
+- Download the **LTS** version from [nodejs.org](https://nodejs.org/) and install it, **or**
+- use a version manager (recommended if you work on several projects): [nvm](https://github.com/nvm-sh/nvm) on macOS/Linux, [nvm-windows](https://github.com/coreybutler/nvm-windows) or [fnm](https://github.com/Schniz/fnm) on Windows.
+
+Check it in a **new** terminal window:
+
+```bash
+node -v   # should print v20.9.0 or higher
+npm -v
+```
+
+### 2. Install Git and VS Code
+
+- [Git](https://git-scm.com/) — check with `git --version`. Then tell Git who you are (once):
+
+  ```bash
+  git config --global user.name "Your Name"
+  git config --global user.email "you@example.com"
+  ```
+
+- [VS Code](https://code.visualstudio.com/) — then install the extensions from the [VS Code extensions](#-vs-code-extensions-for-nextjs--typescript) section below. On macOS, run *Shell Command: Install 'code' command in PATH* from the Command Palette (`Cmd+Shift+P`) so you can open folders with `code .`.
+
+### 3. Create a new Next.js project
+
+Go to the folder where you keep your projects and run `create-next-app`:
+
+```bash
+npx create-next-app@latest gatherly
+```
+
+`npx` downloads and runs the latest `create-next-app` without installing it globally. You will be asked:
+
+```txt
+Would you like to use the recommended Next.js defaults?
+  ❯ Yes, use recommended defaults - TypeScript, ESLint, Tailwind CSS, App Router, AGENTS.md
+```
+
+Choose **Yes, use recommended defaults**. That gives you exactly the setup we use in the course. If you pick *customize settings*, answer: TypeScript **Yes**, linter **ESLint**, Tailwind CSS **Yes**, `src/` directory **No**, App Router **Yes**, import alias **`@/*`**.
+
+> 💡 Add `--yes` to skip the questions and use the defaults: `npx create-next-app@latest gatherly --yes`
+
+This creates a `gatherly/` folder, adds the starter files and runs `npm install` for you.
+
+### 4. Run the development server
+
+```bash
+cd gatherly
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). You should see the Next.js starter page.
+
+- Edit `app/page.tsx` and save. The browser updates straight away (**hot reload**).
+- Stop the server with `Ctrl+C` in the terminal.
+- Port 3000 already in use? Next.js picks the next free port (3001, …). Check the terminal output for the URL.
+
+### 5. Open it in VS Code
+
+```bash
+code .
+```
+
+Open a terminal inside VS Code with ``Ctrl+` `` so the editor and `npm run dev` sit side by side.
+
+### 6. Make it a Git repository and push to GitHub
+
+`create-next-app` already ran `git init` and made the first commit (unless you created it inside another Git repository). Create an **empty** repository on [GitHub](https://github.com/new) (no README, no .gitignore), then:
+
+```bash
+git remote add origin https://github.com/<your-username>/gatherly.git
+git branch -M main
+git push -u origin main
+```
+
+`node_modules/` and `.next/` are already in `.gitignore`. Never commit them: they are generated, and anyone can recreate them with `npm install` / `npm run dev`.
+
+### Running a project you cloned (like the ones in this repo)
+
+A cloned project has no `node_modules/`, so install the dependencies first:
+
+```bash
+git clone <repo-url>
+cd <repo>/class_01_intro/gatherly
+npm install        # reads package.json + package-lock.json, creates node_modules/
+npm run dev
+```
+
+### The four commands you'll use all the time
+
+| Command         | When                                                                                      |
+| --------------- | ----------------------------------------------------------------------------------------- |
+| `npm install`   | After cloning, or when `package.json` changed (e.g. after `git pull`)                     |
+| `npm run dev`   | While coding. Fast, hot reload, detailed errors                                           |
+| `npm run build` | To check the production build. Finds type errors and shows which routes are static or dynamic |
+| `npm run start` | Runs the production build locally (after `build`)                                          |
+
+### Troubleshooting
+
+| Problem                                             | Fix                                                                                  |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `node: command not found` / `'node' is not recognized` | Close the terminal and open a new one after installing Node. Still failing? Reinstall and restart your computer. |
+| `You are using Node.js 18… Next.js requires >=20.9` | Update Node.js (step 1). With nvm: `nvm install --lts && nvm use --lts`               |
+| `Module not found` right after cloning               | You forgot `npm install`.                                                             |
+| Strange errors after switching branches or upgrading | Stop the server, delete `.next/` (and `node_modules/` if needed), run `npm install`, then `npm run dev` again. |
+| Changes in `next.config.ts` or `.env` not picked up  | Restart `npm run dev`.                                                                |
+| PowerShell: *running scripts is disabled*           | Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or use the VS Code terminal with Command Prompt. |
 
 ---
 
@@ -99,15 +215,20 @@ All homework instructions live in the [`homeworks/`](./homeworks) folder. Each a
 
 ## 📁 Class materials
 
-In-class examples and exercises are organized by session (e.g. `class_01_introduction/`). Each class folder can contain:
+In-class examples and exercises are organized by session (e.g. `class_01_intro/`). Each class folder can contain:
 
 - **`gatherly/`** — the course application as it stands at the end of that class. Fell behind? Start the next class from here.
 - **`examples/`** — small standalone apps that show one concept in isolation.
+- **`README.md`** — what the class covers, where to find each concept in the code, exercises and links.
+
+| Class | Topic |
+| ----- | ----- |
+| [01 — Introduction](./class_01_intro) | App Router, routing, layouts, Server vs Client Components, rendering, Tailwind |
 
 To run any of them:
 
 ```bash
-cd class_01_introduction/gatherly
+cd class_01_intro/gatherly
 npm install
 npm run dev
 ```

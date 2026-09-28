@@ -1,3 +1,12 @@
+/*
+ * A plain, global CSS file imported from app/styling/page.tsx.
+ *
+ * ⚠️ Even though it is imported by one page, this is NOT scoped to that page:
+ * once loaded, `.card` applies everywhere in the app. If you want styles that
+ * are truly local to a component, use a CSS Module instead
+ * (e.g. `card.module.css` + `import styles from './card.module.css'`),
+ * which generates unique class names for you.
+ */
 .card {
 	border-radius: 5px;
 	background-color: gray;
