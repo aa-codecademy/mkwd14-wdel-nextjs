@@ -224,6 +224,7 @@ In-class examples and exercises are organized by session (e.g. `class_01_intro/`
 | Class | Topic |
 | ----- | ----- |
 | [01 — Introduction](./class_01_intro) | App Router, routing, layouts, Server vs Client Components, rendering, Tailwind |
+| [02 — Essentials](./class_02_essentials) | Where code runs, streaming with Suspense, error.tsx / not-found.tsx, Gatherly layout, mock data and event grid |
 
 To run any of them:
 

@@ -1,8 +1,23 @@
+/**
+ * MOCK DATA — fake events so we can build the UI before we have a database.
+ *
+ * Everything that imports `events` from here will later read from PostgreSQL
+ * (class 03) instead. The data is shaped exactly like the `GatherlyEvent` type,
+ * so the components won't notice the switch.
+ *
+ * It's a regular TypeScript module, imported only by Server Components, so it
+ * never ends up in the browser's JS bundle.
+ */
 import type { Category } from '../types/event-category';
 import type { Organizer } from '../types/event-organizer';
 import type { Venue } from '../types/event-venue';
 import type { GatherlyEvent } from '../types/gatherly-event';
 
+// `satisfies Record<string, Category>` checks that EVERY value is a valid
+// Category (missing or misspelled fields are errors) WITHOUT widening the type.
+// We can still write `categories.conference` with autocomplete. With
+// `const categories: Record<string, Category>`, TypeScript would forget the
+// keys, and `categories.conference` could be undefined.
 const categories = {
   conference: { id: 'c1', name: 'Conference', slug: 'conference' },
   meetup: { id: 'c2', name: 'Meetup', slug: 'meetup' },
@@ -52,8 +67,13 @@ const organizers = {
   soundwave: { id: 'u3', name: 'Soundwave Live' },
 } satisfies Record<string, Organizer>;
 
+// Small helper that builds an Unsplash image URL from a photo id.
+// `w=1200&q=75&fm=jpg` asks Unsplash for a 1200px wide, 75% quality JPG.
+// The host must be allowed in next.config.ts for next/image to load it.
 const cover = (id: string) => `https://images.unsplash.com/photo-${id}?w=1200&q=75&fm=jpg`;
 
+// The type annotation `GatherlyEvent[]` makes TypeScript check every object
+// below. Forget a field or misspell `status`, and you get an error right here.
 export const events: GatherlyEvent[] = [
   {
     id: 'e1',
@@ -62,11 +82,13 @@ export const events: GatherlyEvent[] = [
     description:
       'A full day of talks on the App Router, Server Components and caching, from people who ship them in production. Lunch and after-party included.',
     coverImageUrl: cover('1540575467063-178a50c2df87'),
+    // ISO 8601 date with a time-zone offset (+01:00 = Central European Time in winter).
     startsAt: new Date('2027-03-12T09:00:00+01:00'),
     endsAt: new Date('2027-03-12T18:00:00+01:00'),
     status: 'published',
     city: 'Skopje',
     minPriceCents: 4900,
+    // References to the objects above — shared, not copied. Several events use venues.hub.
     venue: venues.hub,
     categories: [categories.conference],
     organizer: organizers.avenga,
@@ -253,6 +275,7 @@ export const events: GatherlyEvent[] = [
     coverImageUrl: cover('1470229722913-7c0e2dbbafd3'),
     startsAt: new Date('2027-12-18T20:00:00+01:00'),
     endsAt: new Date('2027-12-18T23:00:00+01:00'),
+    // A draft — useful later to test that drafts are hidden from the public list.
     status: 'draft',
     city: 'Bitola',
     minPriceCents: 2000,

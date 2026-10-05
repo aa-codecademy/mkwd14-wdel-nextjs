@@ -1,11 +1,21 @@
 @import 'tailwindcss';
 
+/*
+ * GLOBAL STYLES for Gatherly — imported once in app/layout.tsx.
+ *
+ * In class 02 we replaced the create-next-app colours with Gatherly's own
+ * brand tokens.
+ */
+
 /* Design tokens. Defining a variable in @theme creates the utility:
    --color-brand-500 → bg-brand-500, text-brand-500, border-brand-500, ... */
 @theme {
+  /* oklch(lightness chroma hue) is a modern colour format. Same hue (250 = blue) with different
+     lightness gives a consistent colour scale: 50 = lightest, 900 = darkest. */
   --color-brand-50: oklch(0.97 0.02 250);
   --color-brand-500: oklch(0.62 0.18 250);
   --color-brand-900: oklch(0.31 0.1 250);
+  /* --radius-* tokens create `rounded-*` utilities: --radius-card -> rounded-card */
   --radius-card: 0.75rem;
 }
 

@@ -1,36 +1,21 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Class 02 — Examples
 
-## Getting Started
-
-First, run the development server:
+Playground routes for class 2. Every file under `app/` has comments explaining **what** happens and **why**, so read them alongside the running app.
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| URL                                                                     | Shows                                                                      |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [/where-does-this-run](http://localhost:3000/where-does-this-run)       | Server vs Client Component — compare the terminal and the browser console  |
+| [/streaming](http://localhost:3000/streaming)                           | `<Suspense>` streams a slow component in after 5 s                         |
+| [/error-examples](http://localhost:3000/error-examples)                 | Click the button: `error.tsx` catches a render error                       |
+| [/error-examples/missing](http://localhost:3000/error-examples/missing) | `notFound()` → `error-examples/not-found.tsx`                              |
+| [/error-examples/123](http://localhost:3000/error-examples/123)         | `notFound()` in a dynamic route → `[id]/not-found.tsx`                     |
+| [/error-examples/42](http://localhost:3000/error-examples/42)           | The same dynamic route when the item exists                                |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> In development, the Next.js error overlay appears on top of `error.tsx`. Close it to see your own error UI, or try a production build (`npm run build && npm run start`). There, Server Component error messages are also hidden from the browser.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See the [class README](../README.md) for the full explanation, exercises and links.
