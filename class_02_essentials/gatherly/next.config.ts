@@ -3,6 +3,12 @@
 // All options: https://nextjs.org/docs/app/api-reference/config/next-config-js
 import type { NextConfig } from 'next';
 
-const nextConfig: NextConfig = {/* config options here */};
+const nextConfig: NextConfig = {
+	images: {
+		remotePatterns: [
+			{ protocol: 'https', hostname: 'images.unsplash.com'}
+		]
+	}
+};
 
 export default nextConfig;
