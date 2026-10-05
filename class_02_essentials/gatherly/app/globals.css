@@ -1,0 +1,16 @@
+@import 'tailwindcss';
+
+/* Design tokens. Defining a variable in @theme creates the utility:
+   --color-brand-500 → bg-brand-500, text-brand-500, border-brand-500, ... */
+@theme {
+  --color-brand-50: oklch(0.97 0.02 250);
+  --color-brand-500: oklch(0.62 0.18 250);
+  --color-brand-900: oklch(0.31 0.1 250);
+  --radius-card: 0.75rem;
+}
+
+/* `inline` because the value is another variable, set on <html> by next/font.
+   Without it the utility would point at a variable that doesn't exist where it's read. */
+@theme inline {
+  --font-sans: var(--font-inter);
+}
