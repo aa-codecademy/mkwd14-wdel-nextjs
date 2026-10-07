@@ -1,9 +1,11 @@
 /**
  * MOCK DATA — fake events so we can build the UI before we have a database.
  *
- * Everything that imports `events` from here will later read from PostgreSQL
- * (class 03) instead. The data is shaped exactly like the `GatherlyEvent` type,
- * so the components won't notice the switch.
+ * The pages still read from this file. In class 03 the database (db/schema.ts) and its
+ * migrations were added, and the mock objects now have the same shape as database rows
+ * (that's why they carry `createdAt`, `email`, `handle`, ...). So once the tables are filled
+ * with this data (a seed script), swapping `events` for a database query won't need changes
+ * in the components.
  *
  * It's a regular TypeScript module, imported only by Server Components, so it
  * never ends up in the browser's JS bundle.

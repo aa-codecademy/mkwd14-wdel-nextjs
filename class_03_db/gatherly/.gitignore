@@ -30,7 +30,8 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files: .env holds secrets (database password) and must NEVER be committed.
+# The template `.env.example` IS committed. Everyone copies it to their own `.env`.
 .env
 
 # vercel

@@ -1,10 +1,10 @@
 /**
  * EventGrid — renders one <EventCard /> per event in a responsive grid.
  *
- * For now the data comes from a mock file. In class 03 we'll load events from
- * PostgreSQL instead. Only this import (and maybe an `await`) will change. The
- * cards and the page stay the same, which is one benefit of splitting data
- * from UI.
+ * For now the data still comes from a mock file, even though the database now exists
+ * (see db/). The next step is to load events from PostgreSQL with Drizzle instead. Only
+ * this import (and an `await`) will change. The cards and the page stay the same, which is
+ * one benefit of splitting data from UI.
  */
 // `@/` is the import alias from tsconfig.json ("@/*": ["./*"]): `@/` means
 // "the project root". `@/mocks/mock-events` works the same from any folder,

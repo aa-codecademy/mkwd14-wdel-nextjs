@@ -1,14 +1,24 @@
-# Gatherly — end of class 02
+# Gatherly — end of class 03
 
-The course application as it stands after class 2: a **Next.js 16** project (App Router, TypeScript, Tailwind CSS v4) with a shared layout (header and footer), Gatherly's brand design tokens, a landing page, and an `/events` page that renders typed **mock data** as a grid of cards with optimised remote images. The database replaces the mock data in class 3.
+The course application as it stands after class 3: the class 2 app (shadcn/ui cards, shared layout) plus a **PostgreSQL database** described with **Drizzle ORM** — a schema (`db/schema.ts`), three SQL migrations (`drizzle/`), a database client (`db/index.ts`) and npm scripts to manage it.
 
-| Route                                     | File                  |
-| ----------------------------------------- | --------------------- |
-| [/](http://localhost:3000)                | `app/page.tsx`        |
-| [/events](http://localhost:3000/events)   | `app/events/page.tsx` |
+> 📘 **Setting up PostgreSQL and Drizzle?** The full step-by-step guide (install on Mac/Windows **or** Docker, connection string, migrations, troubleshooting) is in the **[class 03 README](../README.md)**.
+
+| Route                                   | File                  | Data source            |
+| --------------------------------------- | --------------------- | ---------------------- |
+| [/](http://localhost:3000)              | `app/page.tsx`        | none                   |
+| [/events](http://localhost:3000/events) | `app/events/page.tsx` | `mocks/mock-events.ts` |
+
+The pages still use the mock data. Wiring them to the database is the next step.
+
+## 🚀 Quick start
+
+You need a running PostgreSQL server with a `gatherly` database first ([class README, Step 1](../README.md#-step-1--get-a-postgresql-server-choose-one-option)). Then:
 
 ```bash
+cp .env.example .env     # then check DATABASE_URL (Windows PowerShell: Copy-Item .env.example .env)
 npm install
+npm run db:migrate       # creates the tables
 npm run dev
 ```
 
@@ -16,59 +26,53 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## 📜 Scripts
 
-| Command                | What it does                                                        |
-| ---------------------- | ------------------------------------------------------------------- |
-| `npm run dev`          | Dev server with hot reload (Turbopack)                              |
-| `npm run build`        | Production build — also type-checks and shows static/dynamic routes |
-| `npm run start`        | Serves the production build (run `build` first)                     |
-| `npm run lint`         | ESLint — finds bugs and bad patterns                                |
-| `npm run lint:fix`     | ESLint, fixing what it can automatically                            |
-| `npm run format`       | Prettier — formats every file                                       |
-| `npm run format:check` | Prettier — only reports unformatted files (used in CI / homework)   |
-| `npm run check`        | Type check + lint + format check. Run before every push.            |
+| Command                | What it does                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------- |
+| `npm run dev`          | Dev server with hot reload (Turbopack)                                                |
+| `npm run build`        | Production build — also type-checks and shows static/dynamic routes                   |
+| `npm run start`        | Serves the production build (run `build` first)                                       |
+| `npm run typecheck`    | Generates Next.js route types, then runs the TypeScript compiler                      |
+| `npm run lint`         | ESLint — finds bugs and bad patterns (`lint:fix` also fixes what it can)              |
+| `npm run format`       | Prettier — formats every file (`format:check` only reports)                           |
+| `npm run check`        | Type check + lint + format check. Run before every push                               |
+| `npm run db:generate`  | Writes a new SQL migration in `drizzle/` from changes in `db/schema.ts`               |
+| `npm run db:migrate`   | Applies the migrations that haven't run yet to the database in `DATABASE_URL`         |
+| `npm run db:studio`    | Opens Drizzle Studio, a browser UI for your data                                      |
+| `npm run db:seed`      | Empty placeholder for now. It becomes the script that fills the tables with sample data |
 
 ## 🗂 Project structure
 
 ```
 gatherly/
 ├── app/                  ← the App Router: folders = URLs
-│   ├── layout.tsx        ← root layout: <html>, <body>, Inter font, metadata, Header + Footer
+│   ├── layout.tsx        ← root layout: <html>, <body>, Geist font, metadata, Header + Footer
 │   ├── page.tsx          ← the "/" route (landing page)
 │   ├── events/page.tsx   ← the "/events" route
-│   ├── globals.css       ← Tailwind import + brand design tokens (@theme)
-│   └── favicon.ico       ← picked up automatically as the site icon
-├── components/           ← shared UI (not routes): header, footer, event grid, event card
-├── types/                ← TypeScript types for our data: GatherlyEvent, Venue, Category, …
-├── mocks/                ← fake data used until we have a database (class 03)
-├── public/               ← static files served as-is: /next.svg → public/next.svg
+│   └── globals.css       ← Tailwind, brand tokens (@theme) and shadcn's theme variables
+├── db/                   ← NEW in class 03
+│   ├── schema.ts         ← the tables, relations and inferred types
+│   └── index.ts          ← the `db` client (server-only)
+├── drizzle/              ← NEW: generated SQL migrations + meta/ (commit, don't hand-edit)
+├── drizzle.config.ts     ← NEW: drizzle-kit settings
+├── .env.example          ← NEW: template for DATABASE_URL (copy to .env, never commit .env)
+├── components/           ← shared UI: header, footer, event grid/card, favourite button
+│   └── ui/               ← shadcn/ui components (button, card, badge)
+├── lib/                  ← utils.ts (`cn()` for class names), format.ts (dates, prices)
+├── types/                ← GatherlyEvent is now built from the DB types; the other files are legacy
+├── mocks/                ← sample data, shaped like database rows. Still used by the pages
+├── components.json       ← shadcn/ui config
 ├── next.config.ts        ← Next.js options (allowed remote image hosts)
 ├── tsconfig.json         ← TypeScript options; "@/*" import alias; extra strict checks
-├── eslint.config.mjs     ← ESLint rules (Next.js + TypeScript presets + our own rules)
-├── postcss.config.mjs    ← wires Tailwind into the CSS build
+├── eslint.config.mjs     ← ESLint rules (ignores the generated drizzle/ folder)
 ├── .prettierrc.json      ← Prettier options + Tailwind class sorting
-├── .nvmrc                ← Node version for nvm (`nvm use`)
-├── .vscode/              ← format on save, ESLint fix on save, recommended extensions
-├── .claude/ .cursor/ .github/ ← project rules for AI assistants (Claude Code, Cursor, Copilot)
-├── AGENTS.md / CLAUDE.md ← entry points for AI assistants
+├── .vscode/ .claude/ .cursor/ .github/ ← editor settings and AI assistant rules
 └── package.json          ← dependencies and scripts
 ```
-### Why these tools?
 
-- **TypeScript** catches mistakes (typos, wrong props, missing `await`) before you run the code.
-- **ESLint** with `eslint-config-next` knows React and Next.js rules — e.g. hooks rules, using `<Image>` / `<Link>`.
-- **Prettier** formats code the same way for everyone, so diffs only show real changes. `prettier-plugin-tailwindcss` sorts Tailwind classes in a consistent order.
-- **`eslint-config-prettier`** turns off ESLint rules that would fight with Prettier.
-- **`.vscode/settings.json`** formats on save and uses the project's TypeScript version rather than the one bundled with VS Code.
-- **`engines.node >= 20.9`** in `package.json` documents the minimum Node.js version Next.js 16 needs. `.nvmrc` lets `nvm use` pick the right version.
-- **Stricter `tsconfig.json`**: `noUncheckedIndexedAccess` makes `array[0]` possibly `undefined`, so you have to handle the "not found" case.
-- **Extra ESLint rules**: `import type` for type-only imports, `===` instead of `==`, warnings for leftover `console.log`, and unused variables are errors (prefix with `_` to allow one on purpose).
-- **AI assistant rules** (`.claude/rules`, `.cursor/rules`, `.github/copilot-instructions.md`): the same project rules in each tool's format. They pin the versions we use and stop assistants from suggesting outdated Next.js 14 / Tailwind 3 code. AI is welcome, but you must understand every line it writes.
+---
 
 ## 🔗 Links
 
+- [Class 03 README](../README.md) — PostgreSQL setup (Mac, Windows, Docker), Drizzle explained, troubleshooting, exercises
+- [Drizzle ORM docs](https://orm.drizzle.team/docs/overview) · [PostgreSQL docs](https://www.postgresql.org/docs/current/)
 - [Next.js project structure](https://nextjs.org/docs/app/getting-started/project-structure)
-- [`next` CLI (dev, build, start, typegen)](https://nextjs.org/docs/app/api-reference/cli/next)
-- [ESLint in Next.js](https://nextjs.org/docs/app/api-reference/config/eslint)
-- [Prettier options](https://prettier.io/docs/options) · [prettier-plugin-tailwindcss](https://github.com/tailwindlabs/prettier-plugin-tailwindcss)
-- [`next/image` remotePatterns](https://nextjs.org/docs/app/api-reference/components/image#remotepatterns)
-- [Class 02 README](../README.md) — concepts, exercises and more links

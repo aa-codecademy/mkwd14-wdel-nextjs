@@ -1,6 +1,6 @@
 # Gatherly — end of class 02
 
-The course application as it stands after class 2: a **Next.js 16** project (App Router, TypeScript, Tailwind CSS v4) with a shared layout (header and footer), Gatherly's brand design tokens, a landing page, and an `/events` page that renders typed **mock data** as a grid of cards with optimised remote images. The database replaces the mock data in class 3.
+The course application as it stands after class 2: a **Next.js 16** project (App Router, TypeScript, Tailwind CSS v4) with a shared layout (header and footer), Gatherly's brand design tokens, a landing page, and an `/events` page that renders typed **mock data** as a grid of cards with optimised remote images, styled with **shadcn/ui** (Card, Badge, Button). The database replaces the mock data in class 3.
 
 | Route                                     | File                  |
 | ----------------------------------------- | --------------------- |
@@ -32,12 +32,15 @@ Open [http://localhost:3000](http://localhost:3000).
 ```
 gatherly/
 ├── app/                  ← the App Router: folders = URLs
-│   ├── layout.tsx        ← root layout: <html>, <body>, Inter font, metadata, Header + Footer
+│   ├── layout.tsx        ← root layout: <html>, <body>, Geist font, metadata, Header + Footer
 │   ├── page.tsx          ← the "/" route (landing page)
 │   ├── events/page.tsx   ← the "/events" route
-│   ├── globals.css       ← Tailwind import + brand design tokens (@theme)
+│   ├── globals.css       ← Tailwind import, brand tokens (@theme) and shadcn's theme variables
 │   └── favicon.ico       ← picked up automatically as the site icon
-├── components/           ← shared UI (not routes): header, footer, event grid, event card
+├── components/           ← shared UI (not routes): header, footer, event grid, event card, favourite button
+│   └── ui/               ← shadcn/ui components (button, card, badge) — copied into our project by the CLI
+├── lib/                  ← helpers: utils.ts (`cn()` for class names), format.ts (dates, prices)
+├── components.json       ← shadcn/ui config (style, icons, path aliases)
 ├── types/                ← TypeScript types for our data: GatherlyEvent, Venue, Category, …
 ├── mocks/                ← fake data used until we have a database (class 03)
 ├── public/               ← static files served as-is: /next.svg → public/next.svg
@@ -52,6 +55,10 @@ gatherly/
 ├── AGENTS.md / CLAUDE.md ← entry points for AI assistants
 └── package.json          ← dependencies and scripts
 ```
+### Why shadcn/ui?
+
+It gives us accessible, good-looking building blocks without locking us into a library: the source is in `components/ui/`, so we can change it. Full step-by-step installation guide: [class 02 README, section 6](../README.md#6-shadcnui--installing-and-using-it-step-by-step).
+
 ### Why these tools?
 
 - **TypeScript** catches mistakes (typos, wrong props, missing `await`) before you run the code.

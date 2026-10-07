@@ -17,9 +17,9 @@ export default function EventsPage() {
     <div>
       <h1 className="text-3xl font-bold text-brand-900">Upcoming events</h1>
       {/*
-       * `text-muted-foreground` doesn't do anything yet: there's no
-       * `--color-muted-foreground` token in globals.css. It's a shadcn/ui
-       * token, and it will start working once we add shadcn/ui.
+       * `text-muted-foreground` (softer grey text) is a shadcn/ui colour token.
+       * It works now because `shadcn init` added `--color-muted-foreground` to
+       * app/globals.css. Before shadcn it silently did nothing.
        */}
       <p className="text-muted-foreground mt-1 mb-8">Everything happening on Gatherly.</p>
       <EventGrid />

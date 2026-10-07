@@ -1,6 +1,6 @@
 # Class 02 — Next.js Essentials
 
-Where does my code run? This class covers the **Server and Client Component** model, **streaming** slow content with `<Suspense>`, handling **errors and 404s** with special files, and the first real Gatherly screens: a shared layout with header and footer, design tokens, typed mock data, and an events grid with optimised remote images.
+Where does my code run? This class covers the **Server and Client Component** model, **streaming** slow content with `<Suspense>`, handling **errors and 404s** with special files, and the first real Gatherly screens: a shared layout with header and footer, design tokens, typed mock data, and an events grid with optimised remote images — styled with **shadcn/ui** components (Card, Badge, Button).
 
 ## 📁 What's in this folder
 
@@ -70,11 +70,134 @@ Try: the **Throw unhandled** button on [/error-examples](http://localhost:3000/e
 | Domain types                 | `types/`                                  | `GatherlyEvent`, `Venue`, `Category`, … — TypeScript checks every field               |
 | Mock data                    | `mocks/mock-events.ts`                    | Build the UI before the database exists. Swapped for PostgreSQL in class 03           |
 | Event grid + cards           | `components/event-grid.tsx`, `event-card.tsx` | Rendering lists with `.map()` and `key`, responsive grid                         |
+| shadcn/ui components         | `components/ui/`, `components.json`, `lib/utils.ts` | Ready-made, accessible Card / Badge / Button that we own as source code. See [section 6](#6-shadcnui--installing-and-using-it-step-by-step) |
+| Formatting helpers           | `lib/format.ts`                           | Dates and prices turned into readable text with `Intl`, in one place                  |
+| A small Client Component     | `components/favourite-button.tsx`         | Heart toggle with `useState`. Only this leaf is `'use client'`                        |
 | Remote images                | `next.config.ts` → `images.remotePatterns` | `next/image` only optimises images from hosts you allow                              |
 | Stricter tooling             | `eslint.config.mjs`, `tsconfig.json`, `.prettierrc.json` | Type-only imports, `===`, no stray `console.log`, `noUncheckedIndexedAccess` |
 | AI assistant rules           | `.claude/`, `.cursor/`, `.github/`        | Tell AI tools which versions and conventions this project uses                        |
 
 **Components folder convention:** shared UI lives in `components/` at the project root, outside `app/`. Files outside `app/` can never become routes. Import them with a relative path or with the `@/` alias (`@/components/header`).
+
+
+### 6. shadcn/ui — installing and using it, step by step
+
+**What it is.** shadcn/ui is *not* a package like Material UI. It's a **CLI that copies component source code into your project** (`components/ui/button.tsx`, ...). After that the code is yours: read it, change the styles, add a variant. The components are built from:
+
+| Piece                                         | Role                                                                                 |
+| --------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Tailwind CSS**                              | The looks (classes)                                                                  |
+| **[Base UI](https://base-ui.com/)** (or Radix UI) | The behaviour: accessibility, focus, keyboard support. We chose **Base UI**       |
+| **class-variance-authority (`cva`)**          | Maps props like `variant="outline"` to class names                                   |
+| **[lucide-react](https://lucide.dev/)**       | The icons                                                                            |
+
+> Our `components.json` says `"style": "base-nova"` — that's the **Nova** preset on **Base UI**, with `lucide` icons and the `neutral` base colour.
+
+#### Before you start
+
+- [ ] A Next.js project with the **App Router** (we have one: `app/`).
+- [ ] **Tailwind CSS v4** — your `app/globals.css` starts with `@import 'tailwindcss';` and there is **no** `tailwind.config.js`. (This guide assumes v4, which is what `create-next-app` installs today.)
+- [ ] The `@/*` import alias in `tsconfig.json`: `"paths": { "@/*": ["./*"] }`. `create-next-app` adds it for you.
+- [ ] You're in the **project root** (the folder with `package.json`) and your work is **committed**, so `git diff` shows exactly what the CLI changed.
+
+#### Step 0 (only for a brand-new project)
+
+```bash
+npx create-next-app@latest my-app
+cd my-app
+```
+
+Choose the recommended defaults (TypeScript, ESLint, Tailwind, App Router).
+
+#### Step 1 — initialise shadcn/ui
+
+```bash
+npx shadcn@latest init
+```
+
+The CLI asks a few questions (which component library — **Base** or Radix — and which preset/theme, plus the base colour). Pick **Base** and the default **Nova** preset to get exactly what Gatherly uses. The questions can change between CLI versions, so read them calmly.
+
+Want no questions? This uses the defaults (Next.js template + the `base-nova` preset, which is our setup):
+
+```bash
+npx shadcn@latest init -d
+```
+
+Useful flags: `-b, --base <base|radix|aria>` (component library), `-p, --preset <name>`, `-d, --defaults`, `-f, --force` (overwrite an existing setup). List them all with `npx shadcn@latest init --help`.
+
+**What `init` changes** — run `git diff` and `git status` and find each of these:
+
+| File                    | What happened                                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `components.json`       | **New.** shadcn's config: style, icon library, the path aliases (`@/components`, `@/components/ui`, `@/lib/utils`) and where your CSS lives |
+| `lib/utils.ts`          | **New.** The `cn()` helper that joins class names and resolves Tailwind conflicts                          |
+| `app/globals.css`       | **Modified.** Imports `tw-animate-css` and `shadcn/tailwind.css`, and adds the theme variables (`--background`, `--primary`, `--muted-foreground`, ...) for light and `.dark` mode |
+| `app/layout.tsx`        | **Modified.** Adds the Geist font (`--font-sans`) and uses `cn()` on `<html>`                              |
+| `package.json`          | **Modified.** New dependencies: `@base-ui/react`, `class-variance-authority`, `cn`, `lucide-react`, `tw-animate-css`, `shadcn` |
+
+#### Step 2 — add components
+
+```bash
+npx shadcn@latest add button card badge
+```
+
+This creates `components/ui/button.tsx`, `card.tsx` and `badge.tsx`. Add more any time (`add input`, `add dialog`, ...). Run `npx shadcn@latest add` without names to pick from a list. If a file already exists, the CLI asks before overwriting it.
+
+Browse all components: [ui.shadcn.com/docs/components](https://ui.shadcn.com/docs/components).
+
+#### Step 3 — use them
+
+```tsx
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+export default function Example() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Next.js Conf Skopje</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Button variant="outline" size="sm">Get ticket</Button>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+See the real thing in `components/event-card.tsx`. Notes:
+
+- `variant` and `size` are defined in `components/ui/button.tsx`. Open it and read `buttonVariants`.
+- `className` is **merged** with the defaults by `cn()`, so `<Card className="pt-0">` overrides the Card's top padding.
+- These components have no state, so they're **Server Components**. A component that needs state or clicks (like our `FavouriteButton`) adds `'use client'` itself.
+
+#### Step 4 — theming
+
+All colours come from CSS variables in `app/globals.css`:
+
+```css
+:root {
+  --primary: oklch(0.205 0 0);        /* light mode */
+}
+.dark {
+  --primary: oklch(0.922 0 0);        /* dark mode, applies inside an element with class="dark" */
+}
+```
+
+Change a value and every component that uses `bg-primary` changes with it. Our own **brand** colours (`brand-500`, ...) live in a separate `@theme` block, so they don't clash with shadcn's.
+
+#### Common problems
+
+| Problem                                                          | Fix                                                                                                  |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| A tutorial uses `<Button asChild>` and it does nothing           | That's the **Radix** version. **Base UI** uses a `render` prop instead: `<Button render={<a href="/" />}>` |
+| `Module not found: Can't resolve '@/components/ui/button'`       | The component wasn't added yet (`npx shadcn@latest add button`), or the `@/*` alias is missing in `tsconfig.json` |
+| `init` complains about Tailwind or the CSS file                  | Check that `app/globals.css` exists and starts with `@import 'tailwindcss';`. On an old Tailwind v3 project, follow shadcn's [Tailwind v3 guide](https://ui.shadcn.com/docs/tailwind-v3) or upgrade to v4 |
+| `npm run format:check` complains about `components/ui/*`         | The generated files use double quotes and no semicolons. Run `npx prettier --write components/ui lib` once |
+| `npm run lint` fails with "`inter` is assigned a value but never used" | A leftover in `app/layout.tsx` (we use Geist now). Remove the unused `Inter` font, see the comment in that file |
+| I want to start over                                             | `git restore .` and delete the untracked files, or re-run `init` with `-f`                           |
+
+**Links:** [Installation: Next.js](https://ui.shadcn.com/docs/installation/next) · [CLI reference](https://ui.shadcn.com/docs/cli) · [Components](https://ui.shadcn.com/docs/components) · [Theming](https://ui.shadcn.com/docs/theming) · [`components.json`](https://ui.shadcn.com/docs/components-json) · [Base UI docs](https://base-ui.com/react/overview/quick-start) · [CVA docs](https://cva.style/docs) · [Lucide icons](https://lucide.dev/icons/)
 
 ---
 
@@ -83,9 +206,10 @@ Try: the **Throw unhandled** button on [/error-examples](http://localhost:3000/e
 1. Add `app/events/loading.tsx` to Gatherly, with a skeleton grid. To see it, temporarily add `await connection()` and a 2 s `sleep` to the events page.
 2. Add `app/not-found.tsx` to Gatherly so unknown URLs show a branded 404 with a link back to `/events`.
 3. Add `app/events/error.tsx` with a **Try again** button that calls `retry()`.
-4. In `EventCard`: format the price (`minPriceCents / 100` with `Intl.NumberFormat`), format the date with `toLocaleDateString`, and change the title `<h1>` to an `<h3>`.
+4. Add a shadcn component (`npx shadcn@latest add skeleton`) and use it in the `loading.tsx` from exercise 1. Run `git status` to see which files the CLI created.
 5. Hide draft events: filter `events` by `status === 'published'` in `EventGrid`.
 6. Move the `console.log` in `ClientLog` out of `useEffect` into the function body. Where does it show up now, and why?
+7. Open `components/ui/button.tsx` and add a new `variant` (say `brand`, using `bg-brand-500 text-white`). Use it on the home page's "Browse events" link with `buttonVariants({ variant: 'brand' })`.
 
 ---
 
@@ -118,6 +242,12 @@ Try: the **Throw unhandled** button on [/error-examples](http://localhost:3000/e
 - [The `satisfies` operator](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-4-9.html#the-satisfies-operator)
 - [`import type`](https://www.typescriptlang.org/docs/handbook/modules/reference.html#type-only-imports-and-exports)
 - [`noUncheckedIndexedAccess`](https://www.typescriptlang.org/tsconfig/#noUncheckedIndexedAccess)
+
+**shadcn/ui**
+
+- [Installation: Next.js](https://ui.shadcn.com/docs/installation/next), [CLI](https://ui.shadcn.com/docs/cli), [components](https://ui.shadcn.com/docs/components) and [theming](https://ui.shadcn.com/docs/theming)
+- [Base UI](https://base-ui.com/) (the accessible primitives we chose) and [Lucide icons](https://lucide.dev/)
+- [class-variance-authority](https://cva.style/docs)
 
 **Tailwind CSS v4**
 
