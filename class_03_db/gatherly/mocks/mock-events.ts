@@ -8,9 +8,7 @@
  * It's a regular TypeScript module, imported only by Server Components, so it
  * never ends up in the browser's JS bundle.
  */
-import type { Category } from '../types/event-category';
-import type { Organizer } from '../types/event-organizer';
-import type { Venue } from '../types/event-venue';
+import type { Category, Event, User, Venue } from '../db/schema';
 import type { GatherlyEvent } from '../types/gatherly-event';
 
 // `satisfies Record<string, Category>` checks that EVERY value is a valid
@@ -19,11 +17,11 @@ import type { GatherlyEvent } from '../types/gatherly-event';
 // `const categories: Record<string, Category>`, TypeScript would forget the
 // keys, and `categories.conference` could be undefined.
 const categories = {
-  conference: { id: 'c1', name: 'Conference', slug: 'conference' },
-  meetup: { id: 'c2', name: 'Meetup', slug: 'meetup' },
-  workshop: { id: 'c3', name: 'Workshop', slug: 'workshop' },
-  concert: { id: 'c4', name: 'Concert', slug: 'concert' },
-  networking: { id: 'c5', name: 'Networking', slug: 'networking' },
+  conference: { id: 'c1', name: 'Conference', slug: 'conference', createdAt: new Date() },
+  meetup: { id: 'c2', name: 'Meetup', slug: 'meetup', createdAt: new Date() },
+  workshop: { id: 'c3', name: 'Workshop', slug: 'workshop', createdAt: new Date() },
+  concert: { id: 'c4', name: 'Concert', slug: 'concert', createdAt: new Date() },
+  networking: { id: 'c5', name: 'Networking', slug: 'networking', createdAt: new Date() },
 } satisfies Record<string, Category>;
 
 const venues = {
@@ -34,6 +32,7 @@ const venues = {
     city: 'Skopje',
     country: 'North Macedonia',
     capacity: 8000,
+    createdAt: new Date(),
   },
   hub: {
     id: 'v2',
@@ -42,6 +41,7 @@ const venues = {
     city: 'Skopje',
     country: 'North Macedonia',
     capacity: 200,
+    createdAt: new Date(),
   },
   lakeside: {
     id: 'v3',
@@ -50,6 +50,7 @@ const venues = {
     city: 'Ohrid',
     country: 'North Macedonia',
     capacity: 1200,
+    createdAt: new Date(),
   },
   hall: {
     id: 'v4',
@@ -58,24 +59,64 @@ const venues = {
     city: 'Bitola',
     country: 'North Macedonia',
     capacity: 450,
+    createdAt: new Date(),
   },
 } satisfies Record<string, Venue>;
 
 const organizers = {
-  avenga: { id: 'u1', name: 'Avenga Academy' },
-  jsMk: { id: 'u2', name: 'JavaScript Macedonia' },
-  soundwave: { id: 'u3', name: 'Soundwave Live' },
-} satisfies Record<string, Organizer>;
+  avenga: {
+    id: 'u1',
+    name: 'Avenga Academy',
+    email: 'academy@avenga.example',
+    handle: 'avenga-academy',
+    role: 'organizer',
+    createdAt: new Date(),
+  },
+  jsMk: {
+    id: 'u2',
+    name: 'JavaScript Macedonia',
+    email: 'hello@javascript.mk.example',
+    handle: 'javascript-macedonia',
+    role: 'organizer',
+    createdAt: new Date(),
+  },
+  soundwave: {
+    id: 'u3',
+    name: 'Soundwave Live',
+    email: 'events@soundwave.example',
+    handle: 'soundwave-live',
+    role: 'organizer',
+    createdAt: new Date(),
+  },
+} satisfies Record<string, User>;
 
 // Small helper that builds an Unsplash image URL from a photo id.
 // `w=1200&q=75&fm=jpg` asks Unsplash for a 1200px wide, 75% quality JPG.
 // The host must be allowed in next.config.ts for next/image to load it.
 const cover = (id: string) => `https://images.unsplash.com/photo-${id}?w=1200&q=75&fm=jpg`;
 
+type MockEvent = Omit<Event, 'coverImageUrl' | 'createdAt' | 'venueId' | 'organizerId'> & {
+  coverImageUrl: string;
+  venue: Venue;
+  categories: Category[];
+  organizer: User;
+};
+
+const mockEvent = ({ venue, organizer, ...event }: MockEvent): GatherlyEvent => ({
+  ...event,
+  coverImageUrl: event.coverImageUrl,
+  createdAt: new Date(),
+  venueId: venue.id,
+  organizerId: organizer.id,
+  venue,
+  categories: event.categories,
+  organizer,
+});
+
 // The type annotation `GatherlyEvent[]` makes TypeScript check every object
 // below. Forget a field or misspell `status`, and you get an error right here.
 export const events: GatherlyEvent[] = [
-  {
+  mockEvent({
     id: 'e1',
     slug: 'nextjs-conf-skopje-2027',
     title: 'Next.js Conf Skopje 2027',
@@ -92,8 +133,8 @@ export const events: GatherlyEvent[] = [
     venue: venues.hub,
     categories: [categories.conference],
     organizer: organizers.avenga,
-  },
-  {
+  }),
+  mockEvent({
     id: 'e2',
     slug: 'summer-lights-festival',
     title: 'Summer Lights Festival',
@@ -108,8 +149,8 @@ export const events: GatherlyEvent[] = [
     venue: venues.arena,
     categories: [categories.concert],
     organizer: organizers.soundwave,
-  },
-  {
+  }),
+  mockEvent({
     id: 'e3',
     slug: 'indie-night-live',
     title: 'Indie Night Live',
@@ -123,8 +164,8 @@ export const events: GatherlyEvent[] = [
     venue: venues.hall,
     categories: [categories.concert],
     organizer: organizers.soundwave,
-  },
-  {
+  }),
+  mockEvent({
     id: 'e4',
     slug: 'design-systems-in-practice',
     title: 'Design Systems in Practice',
@@ -139,8 +180,8 @@ export const events: GatherlyEvent[] = [
     venue: venues.hub,
     categories: [categories.meetup],
     organizer: organizers.jsMk,
-  },
-  {
+  }),
+  mockEvent({
     id: 'e5',
     slug: 'javascript-meetup-january',
     title: 'JavaScript Meetup — January',
@@ -155,8 +196,8 @@ export const events: GatherlyEvent[] = [
     venue: venues.hub,
     categories: [categories.meetup, categories.networking],
     organizer: organizers.jsMk,
-  },
-  {
+  }),
+  mockEvent({
     id: 'e6',
     slug: 'balkan-tech-expo',
     title: 'Balkan Tech Expo',
@@ -171,8 +212,8 @@ export const events: GatherlyEvent[] = [
     venue: venues.lakeside,
     categories: [categories.conference, categories.networking],
     organizer: organizers.avenga,
-  },
-  {
+  }),
+  mockEvent({
     id: 'e7',
     slug: 'founders-dinner-ohrid',
     title: "Founders' Dinner",
@@ -187,8 +228,8 @@ export const events: GatherlyEvent[] = [
     venue: venues.lakeside,
     categories: [categories.networking],
     organizer: organizers.avenga,
-  },
-  {
+  }),
+  mockEvent({
     id: 'e8',
     slug: 'arena-rock-night',
     title: 'Arena Rock Night',
@@ -202,8 +243,8 @@ export const events: GatherlyEvent[] = [
     venue: venues.arena,
     categories: [categories.concert],
     organizer: organizers.soundwave,
-  },
-  {
+  }),
+  mockEvent({
     id: 'e9',
     slug: 'open-mic-tech-talks',
     title: 'Open Mic: Tech Talks',
@@ -218,8 +259,8 @@ export const events: GatherlyEvent[] = [
     venue: venues.hall,
     categories: [categories.meetup],
     organizer: organizers.jsMk,
-  },
-  {
+  }),
+  mockEvent({
     id: 'e10',
     slug: 'typescript-deep-dive-workshop',
     title: 'TypeScript Deep Dive',
@@ -234,8 +275,8 @@ export const events: GatherlyEvent[] = [
     venue: venues.hub,
     categories: [categories.workshop],
     organizer: organizers.avenga,
-  },
-  {
+  }),
+  mockEvent({
     id: 'e11',
     slug: 'product-discovery-workshop',
     title: 'Product Discovery Workshop',
@@ -250,8 +291,8 @@ export const events: GatherlyEvent[] = [
     venue: venues.lakeside,
     categories: [categories.workshop],
     organizer: organizers.avenga,
-  },
-  {
+  }),
+  mockEvent({
     id: 'e12',
     slug: 'react-server-components-meetup',
     title: 'React Server Components, Explained',
@@ -266,8 +307,8 @@ export const events: GatherlyEvent[] = [
     venue: venues.hub,
     categories: [categories.meetup],
     organizer: organizers.jsMk,
-  },
-  {
+  }),
+  mockEvent({
     id: 'e13',
     slug: 'winter-jazz-evening',
     title: 'Winter Jazz Evening',
@@ -282,5 +323,5 @@ export const events: GatherlyEvent[] = [
     venue: venues.hall,
     categories: [categories.concert],
     organizer: organizers.soundwave,
-  },
+  }),
 ];
