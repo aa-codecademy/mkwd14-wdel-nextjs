@@ -10,12 +10,16 @@
  */
 import type { Metadata } from 'next';
 // Inter replaced the Geist fonts from the create-next-app template.
-import { Inter } from 'next/font/google';
+import { Inter, Geist } from 'next/font/google';
 import './globals.css';
 // Shared components live in the top-level `components/` folder, outside `app/`.
 // Files outside `app/` can never become routes, which keeps `app/` for URLs only.
 import { Header } from '../components/header';
 import { Footer } from '../components/footer';
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+
 
 // `variable` exposes the font as the CSS variable --font-inter. globals.css maps
 // it to Tailwind's `font-sans`, so `font-sans` on <body> uses Inter.
@@ -32,7 +36,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     // The font variable has to be on <html> (or above where it's used) so
     // `var(--font-inter)` can be resolved everywhere.
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={cn("font-sans", geist.variable)}>
       {/*
        * "Sticky footer" layout: body is a full-height flex column, and <main>
        * has `flex-1`, so it grows to fill the space. The footer stays at the

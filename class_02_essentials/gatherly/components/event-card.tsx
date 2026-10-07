@@ -12,69 +12,49 @@ import Link from 'next/link';
 // enforces this.
 import type { GatherlyEvent } from '../types/gatherly-event';
 import Image from 'next/image';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
+import { Badge } from './ui/badge';
+import { formatEventDate, formatPrice } from '../lib/format';
+import { FavouriteButton } from './favourite-button';
 
 export function EventCard({ event }: { event: GatherlyEvent }) {
   return (
-    <div className="border">
+    <Card className="pt-0">
       {/* temporary link: TODO: replace with event details link */}
-      {/* Later this becomes /events/[slug], a dynamic route like in the class 01 examples. */}
-      <Link href="/events">
-        {/*
-         * next/image with a REMOTE image (Unsplash). This only works because
-         * next.config.ts allows `images.unsplash.com` in `images.remotePatterns`.
-         * Without that, Next.js refuses to optimise images from unknown hosts.
-         *
-         * width/height are required for remote images. They tell the browser the
-         * aspect ratio up front, so the layout doesn't jump when the image loads.
-         * Next.js also resizes the image and serves a modern format (WebP/AVIF).
-         *
-         * `alt` describes the image for screen readers and shows if it fails to
-         * load. Never leave it out.
-         */}
+      <Link href="/events" className="relative block aspect-video">
         <Image
           src={event.coverImageUrl}
           alt={event.title}
-          // className="object-cover"
-          width={300}
-          height={300}
-          // `sizes` tells the browser how wide the image will be at each screen
-          // size, so it downloads the smallest file that looks sharp.
-          // sizes="(min-width: 1024px) 320px, (min-width: 640px) 50vw, 100vw"
+          className="object-cover"
+          fill
+          sizes="(min-width: 1024px) 320px, (min-width: 640px) 50vw, 100vw"
         />
       </Link>
-      <div className="flex flex-wrap gap-1">
-        {/* An event can have several categories, so we render a list with keys again. */}
-        {event.categories.map((category) => (
-          <span key={category.id}>{category.name}</span>
-        ))}
-      </div>
-      {/*
-       * Note: the page already has an <h1> ("Upcoming events"), so card titles
-       * should be <h2> or <h3>. A page should have one <h1>, which helps
-       * accessibility and SEO.
-       */}
-      <h1>{event.title}</h1>
-      <div>
-        {/*
-         * Raw ISO string for now, e.g. "2027-03-12T08:00:00.000Z". Later we'll
-         * format it for humans with Intl.DateTimeFormat or
-         * toLocaleDateString(). Careful: the server and the user's browser can
-         * be in different time zones.
-         */}
-        <p>{event.startsAt.toISOString()}</p>
+      <CardHeader>
+        <div className="flex flex-wrap gap-1">
+          {event.categories.map((category) => (
+            <Badge key={category.id} variant="secondary">
+              {category.name}
+            </Badge>
+          ))}
+        </div>
+        <CardTitle>
+          {/* temporary link: TODO: replace with event details link */}
+          <Link href="/events" className="hover:underline">
+            {event.title}
+          </Link>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="text-muted-foreground">
+        <p>{formatEventDate(event.startsAt)}</p>
         <p>
           {event.venue.name}, {event.venue.city}
         </p>
-      </div>
-      <div>
-        {/*
-         * Prices are stored in CENTS (whole numbers) to avoid floating-point
-         * rounding errors (0.1 + 0.2 !== 0.3). This still prints e.g.
-         * "From 4900". Divide by 100 and format with
-         * Intl.NumberFormat(..., { style: 'currency', currency: 'EUR' }).
-         */}
-        <p>{event.minPriceCents === 0 ? 'Free' : `From ${event.minPriceCents}`}</p>
-      </div>
-    </div>
+      </CardContent>
+      <CardFooter className="justify-between">
+        <p className="font-semibold">{formatPrice(event.minPriceCents)}</p>
+        <FavouriteButton />
+      </CardFooter>
+    </Card>
   );
 }
