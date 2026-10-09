@@ -1,8 +1,8 @@
-# 🎲 Homework 1 — Game Night: build a word game
+# 🎲 Homework 1 — Word Game
 
-> Every good event starts with an icebreaker. Gatherly needs a **Game Night** page: a **Wordle-style word game**, built into your own Gatherly app.
+> Your first project of your own: a **Wordle-style word game**, built from scratch as a **new, standalone Next.js app**. It has nothing to do with Gatherly.
 
-**Estimated time:** 4–6 hours · **Deadline:** _to be announced in class_ · **Uses:** everything from classes 1–4
+**Estimated time:** 6–8 hours · **Deadline:** none, but the sooner you start, the better · **Uses:** everything from classes 1–4
 
 This homework describes **what** the game must do. **How** you build it is up to you: the data model, file structure, components, naming and libraries are your decisions. There's no single right answer, and making those decisions is the point. Look back at the class READMEs and the code from the classes for ideas.
 
@@ -28,6 +28,26 @@ In **our** version there's no "word of the day". There is a **collection of numb
 
 ---
 
+## 🧱 Starting point
+
+This is a **new project in a new GitHub repository**. Don't build it inside the Gatherly app, and don't reuse its code or its database.
+
+Use the course stack:
+
+- **Next.js 16** (App Router) with **TypeScript** and **Tailwind CSS**
+- **PostgreSQL** with **Drizzle ORM** (migrations and a seed), in **its own new database**
+- **shadcn/ui** for at least some of the components
+
+Setting all this up yourself is part of the homework. The class READMEs have the steps:
+
+- Next.js project setup: the [root README](../README.md#-local-setup--step-by-step)
+- shadcn/ui: [class 02, section 6](../class_02_essentials/README.md#6-shadcnui--installing-and-using-it-step-by-step)
+- PostgreSQL and Drizzle: [class 03](../class_03_db/README.md)
+
+> ⚠️ Mind the versions we pin in the course (for example Drizzle `0.45`, not the `@rc` version shown in some docs). The class 03 README explains why.
+
+---
+
 ## 📋 Business requirements
 
 ### 1. Puzzles
@@ -39,14 +59,14 @@ In **our** version there's no "word of the day". There is a **collection of numb
 
 ### 2. Finding a puzzle
 
-- The site has a **Game** page that explains the rules briefly and **lists all puzzles** ("Puzzle #7", …). Each puzzle in the list opens that puzzle.
+- The **home page** explains the rules briefly and **lists all puzzles** ("Puzzle #7", …). Each puzzle in the list opens that puzzle.
 - The list must **not reveal the secret words**.
-- The Game page can be reached from the **site header** on every page.
+- Every page has a **header** with a way back to the puzzle list.
 
 ### 3. Playing a puzzle
 
-- Every puzzle has its **own address**, so it can be bookmarked and shared (for example `/game/7`).
-- If someone opens the address of a puzzle that doesn't exist, or the number makes no sense (`/game/abc`, `/game/0`, `/game/-3`, `/game/9999`), they see a **friendly "not found" page** with a way back to the puzzle list. The site must not crash or show a blank page.
+- Every puzzle has its **own address**, so it can be bookmarked and shared (for example `/puzzle/7`; the exact address is up to you).
+- If someone opens the address of a puzzle that doesn't exist, or the number makes no sense (a word, `0`, a negative number, a very big number), they see a **friendly "not found" page** with a way back to the puzzle list. The site must not crash or show a blank page.
 - The player sees a board with **6 attempts × 5 letters**, showing past guesses, the current one and the empty attempts.
 - The player can type a guess and submit it.
 - A guess that is **not valid** (fewer or more than 5 letters, digits or symbols, empty) shows a **clear message** and **does not use up an attempt**. Capital letters are fine: `CRANE` and `crane` are the same guess.
@@ -57,17 +77,16 @@ In **our** version there's no "word of the day". There is a **collection of numb
 
 ### 4. Look and feel
 
-- It looks like part of Gatherly: same header, footer and general style.
+- It looks like one consistent app: a header, a footer and a style of your own. Make it yours. It's your project.
 - It's comfortable to use on a **phone-sized screen**.
 - The result of each letter must **not depend on colour alone**. Someone who can't tell green from yellow should still be able to read the result. (How you do that is up to you.)
-- At least one component from the **shadcn/ui** library is used.
 
 ### 5. Quality
 
-- `npm run check` **passes** (type check, lint and formatting). The class 4 code has a few known problems, so fix them first. You'll find them listed in the [class 04 README](../class_04_routing/README.md).
+- `npm run lint` and `npm run build` **pass** with no errors (the build also type-checks your code).
 - No leftover debug output (`console.log`), and no unused code.
 - **No secrets are committed.** `.env` is not in the repository, and `.env.example` is.
-- Someone with a fresh database can follow your README instructions and get the game running. **Add a short "How to run the game" section** to your project's README.
+- Someone with nothing but your repository can get the game running by following your README. **Write a short "How to run the game" section** that covers installing, creating the database, setting `.env`, running the migration and the seed, and starting the app.
 - Your **git history** tells a story: small commits with meaningful messages (at least 5), not one giant "done".
 - You can **explain every line** you hand in, including parts an AI assistant helped with.
 
@@ -97,15 +116,15 @@ Create a file `HOMEWORK_1.md` in the root of your repo and answer these in **2�
 1. Which parts of your game run **on the server** and which **in the browser**? How can you tell? Why did you split it that way?
 2. Open your browser's developer tools on a puzzle page. **Can you find the answer** without playing? Where? Is that a problem in a real game, and what do you think the solution would look like?
 3. Where and how did you store the puzzles, and why did you choose that? What would be different with a different choice?
-4. What happens at `/game/abc`, `/game/0` and `/game/9999`, and which part of your code decides it?
+4. What happens when someone opens a puzzle that doesn't exist (for example a letter or a very big number instead of the number), and which part of your code decides it?
 5. What was the hardest part? What would you do differently if you started again?
 
 ---
 
 ## 📬 How to submit
 
-1. Push your work to **your own GitHub repository** (see the [homework rules](./README.md)).
-2. Send the **link to the repository** as instructed in class.
+1. Create **your own GitHub repository** for this homework and push your work there (see the [homework rules](./README.md)).
+2. Email the **link to the repository** to **[ivo@kostovski.dev](mailto:ivo@kostovski.dev)** and write in the message that the homework is **done**. If the repository is private, invite me as a collaborator (*Settings → Collaborators → Add people*) using the email **ivo.kostovski@gmail.com**.
 3. Make sure `HOMEWORK_1.md` (the reflection) and the "How to run the game" section are in the repo.
 
 ---
@@ -120,15 +139,16 @@ Pick any, or invent your own:
 - 📋 A **Share** button that copies a spoiler-free result, like `Puzzle #7 4/6 🟩🟨⬜⬜🟩`.
 - 🔥 A **hard mode**, where clues you've revealed must be used in later guesses.
 - 🎨 **Animations** for the tiles, and a dark-mode-friendly look.
-- 🧮 The Game page shows which puzzles you've **already solved**.
+- 🧮 The puzzle list shows which puzzles you've **already solved**.
 - 📖 Only **real words** are accepted as guesses.
-- ➕ Anything else that makes Game Night better.
+- 🚀 **Deploy** it (for example on Vercel) and send me the link too.
+- ➕ Anything else that makes the game better.
 
 ---
 
 ## 📚 Where to look when you're stuck
 
-- Your own notes, and the READMEs of the classes: [class 02](../class_02_essentials/README.md) (Server vs Client Components, shadcn/ui), [class 03](../class_03_db/README.md) (the database, migrations), [class 04](../class_04_routing/README.md) (dynamic routes, search, queries, validation, seeding).
+- Your own notes, and the READMEs of the classes: [class 01](../class_01_intro/README.md) (routing, layouts), [class 02](../class_02_essentials/README.md) (Server vs Client Components, shadcn/ui), [class 03](../class_03_db/README.md) (the database, migrations), [class 04](../class_04_routing/README.md) (dynamic routes, queries, validation, seeding).
 - The official docs: [Next.js](https://nextjs.org/docs), [React](https://react.dev/learn), [Drizzle](https://orm.drizzle.team/docs/overview), [Zod](https://zod.dev/), [Tailwind CSS](https://tailwindcss.com/docs), [shadcn/ui](https://ui.shadcn.com/docs).
 - React's guide on [choosing the state structure](https://react.dev/learn/choosing-the-state-structure) has a good tip for this game: don't store what you can calculate.
 - Stuck for a long time? **Ask early**, in class or by email, and say what you tried.
