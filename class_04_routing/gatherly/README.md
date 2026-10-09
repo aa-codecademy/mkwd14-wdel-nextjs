@@ -19,6 +19,7 @@ You need a running PostgreSQL server with a `gatherly` database first ([class RE
 cp .env.example .env     # then check DATABASE_URL (Windows PowerShell: Copy-Item .env.example .env)
 npm install
 npm run db:migrate       # creates the tables
+npm run db:seed          # inserts mock users, categories, venues and events
 npm run dev
 ```
 
@@ -38,7 +39,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run db:generate`  | Writes a new SQL migration in `drizzle/` from changes in `db/schema.ts`               |
 | `npm run db:migrate`   | Applies the migrations that haven't run yet to the database in `DATABASE_URL`         |
 | `npm run db:studio`    | Opens Drizzle Studio, a browser UI for your data                                      |
-| `npm run db:seed`      | Empty placeholder for now. It becomes the script that fills the tables with sample data |
+| `npm run db:seed`      | Inserts Faker-generated users, categories, venues, events and event-category links |
 
 ## 🗂 Project structure
 

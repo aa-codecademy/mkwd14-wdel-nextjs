@@ -141,6 +141,11 @@ export const categoriesRelations = relations(categories, ({ many }) => ({
   eventCategories: many(eventCategories),
 }));
 
+export const eventCategoriesRelations = relations(eventCategories, ({ one }) => ({
+  event: one(events, { fields: [eventCategories.eventId], references: [events.id] }),
+  category: one(categories, { fields: [eventCategories.categoryId], references: [categories.id] }),
+}));
+
 // TYPES inferred from the tables above. `$inferSelect` = the shape of a row we READ.
 // (`$inferInsert` would be the shape we pass when INSERTing; columns with defaults become optional.)
 // Change a column above and every place that uses these types updates automatically.

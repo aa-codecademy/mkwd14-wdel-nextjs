@@ -16,14 +16,14 @@ import Link from 'next/link';
 import Image from 'next/image';
 // shadcn/ui components live in components/ui/ — our own files, copied by the CLI.
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
-// import { Badge } from './ui/badge';
+import { Badge } from './ui/badge';
 // Turn a Date / cents into text. See lib/format.ts.
 import { formatEventDate, formatPrice } from '../lib/format';
 // A Client Component (has state) rendered inside this Server Component.
 import { FavouriteButton } from './favourite-button';
-import type { GatherlyEvent } from '../db/schema';
+import type { EventWithDetails } from '../db/queries/events';
 
-export function EventCard({ event }: { event: GatherlyEvent }) {
+export function EventCard({ event }: { event: EventWithDetails }) {
   return (
     // `pt-0` overrides the Card's default top padding (cn() resolves the conflict),
     // so the cover image can touch the top edge of the card.
@@ -39,7 +39,7 @@ export function EventCard({ event }: { event: GatherlyEvent }) {
        * Remote images need the host in next.config.ts (`remotePatterns`).
        */}
       {event.coverImageUrl && (
-        <Link href="/events" className="relative block aspect-video">
+        <Link href={`/events/${event.slug}`} className="relative block aspect-video">
           <Image
             src={event.coverImageUrl}
             alt={event.title}
@@ -50,17 +50,16 @@ export function EventCard({ event }: { event: GatherlyEvent }) {
         </Link>
       )}
       <CardHeader>
-        {/* <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1">
           {event.categories.map((category) => (
             // `variant="secondary"` is one of the variants defined in components/ui/badge.tsx.
             <Badge key={category.id} variant="secondary">
               {category.name}
             </Badge>
           ))}
-        </div> */}
+        </div>
         <CardTitle>
-          {/* temporary link: TODO: replace with event details link */}
-          <Link href="/events" className="hover:underline">
+          <Link href={`/events/${event.slug}`} className="hover:underline">
             {event.title}
           </Link>
         </CardTitle>
@@ -69,9 +68,9 @@ export function EventCard({ event }: { event: GatherlyEvent }) {
       <CardContent className="text-muted-foreground">
         {/* e.g. "Fri, 12 Mar 2027, 09:00" */}
         <p>{formatEventDate(event.startsAt)}</p>
-        {/* <p>
+        <p>
           {event.venue.name}, {event.venue.city}
-        </p> */}
+        </p>
       </CardContent>
       <CardFooter className="justify-between">
         {/* e.g. "From €49.00" or "Free" */}
