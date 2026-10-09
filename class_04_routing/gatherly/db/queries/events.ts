@@ -1,8 +1,9 @@
 import 'server-only';
 
 import { db } from '@/db';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, ilike } from 'drizzle-orm';
 import { events } from '../schema';
+import type { EventFilters } from '../../lib/event-filters';
 
 const withDetails = {
   venue: true,
@@ -13,6 +14,21 @@ const withDetails = {
 export async function getPublishedEvents() {
   const rows = await db.query.events.findMany({
     where: eq(events.status, 'published'),
+    orderBy: asc(events.startsAt),
+    limit: 50,
+    with: withDetails,
+  });
+
+  return rows.map(flattenCategories);
+}
+
+export async function searchEvents(filters: EventFilters) {
+  const where = filters.q
+    ? and(eq(events.status, 'published'), ilike(events.title, `%${filters.q}%`))
+    : eq(events.status, 'published');
+
+  const rows = await db.query.events.findMany({
+    where,
     orderBy: asc(events.startsAt),
     limit: 50,
     with: withDetails,

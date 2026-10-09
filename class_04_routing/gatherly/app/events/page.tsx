@@ -10,9 +10,13 @@
  */
 // A relative import. `@/components/event-grid` would point to the same file —
 // see the "@/*" alias note in components/event-grid.tsx.
-import { EventGrid } from '../../components/event-grid';
+import { EventResults } from '../../components/event-results';
+import { SearchBox } from '../../components/search-box';
+import { parseEventFilters } from '../../lib/event-filters';
 
-export default function EventsPage() {
+export default async function EventsPage({ searchParams }: PageProps<'/events'>) {
+  const filters = parseEventFilters(await searchParams);
+
   return (
     <div>
       <h1 className="text-3xl font-bold text-brand-900">Upcoming events</h1>
@@ -21,8 +25,13 @@ export default function EventsPage() {
        * It works now because `shadcn init` added `--color-muted-foreground` to
        * app/globals.css. Before shadcn it silently did nothing.
        */}
-      <p className="text-muted-foreground mt-1 mb-8">Everything happening on Gatherly.</p>
-      <EventGrid />
+      <p className="mt-1 mb-8 text-muted-foreground">Everything happening on Gatherly.</p>
+
+      <div className="mb-8 space-y-4">
+        <SearchBox />
+      </div>
+
+      <EventResults filters={filters} />
     </div>
   );
 }

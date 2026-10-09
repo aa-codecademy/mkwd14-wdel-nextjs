@@ -6,12 +6,10 @@
  * this import (and an `await`) will change. The cards and the page stay the same, which is
  * one benefit of splitting data from UI.
  */
-import { getPublishedEvents } from '../db/queries/events';
+import { type EventWithDetails } from '../db/queries/events';
 import { EventCard } from './event-card';
 
-export async function EventGrid() {
-  const events = await getPublishedEvents();
-
+export async function EventGrid({ events }: { events: EventWithDetails[] }) {
   return (
     // Responsive grid: 1 column on phones, 2 from `sm` (640px), 3 from `lg` (1024px).
     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
