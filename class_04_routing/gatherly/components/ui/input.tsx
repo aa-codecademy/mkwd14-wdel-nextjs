@@ -1,3 +1,12 @@
+/**
+ * shadcn/ui Input — added in class 04 with `npx shadcn@latest add input` for the search box.
+ * Same recipe as button.tsx: a Base UI primitive (accessible behaviour) + Tailwind classes,
+ * merged with the caller's `className` by cn(). The long class list covers the states:
+ * focus ring, disabled, invalid (`aria-invalid`), placeholder colour and dark mode.
+ *
+ * It takes all the normal <input> props (`type`, `name`, `defaultValue`, `onChange`, ...),
+ * which is why <SearchBox> can use it like a regular input.
+ */
 import * as React from "react"
 import { Input as InputPrimitive } from "@base-ui/react/input"
 import { cn } from "cn"

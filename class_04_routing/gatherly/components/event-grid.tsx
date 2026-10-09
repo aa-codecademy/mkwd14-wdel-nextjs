@@ -1,14 +1,18 @@
 /**
  * EventGrid — renders one <EventCard /> per event in a responsive grid.
  *
- * For now the data still comes from a mock file, even though the database now exists
- * (see db/). The next step is to load events from PostgreSQL with Drizzle instead. Only
- * this import (and an `await`) will change. The cards and the page stay the same, which is
- * one benefit of splitting data from UI.
+ * Since class 04 the events come from the DATABASE (db/queries/events.ts), not from the
+ * mock file. They're passed in as a prop by <EventResults />. This component only displays a
+ * list and knows nothing about where it came from, which is why we could swap the mock data
+ * for real data without touching the cards.
+ *
+ * `EventWithDetails` is the type inferred from the query: an event + venue + categories +
+ * organizer.
  */
 import { type EventWithDetails } from '../db/queries/events';
 import { EventCard } from './event-card';
 
+// (It's declared `async`, but there's no `await` inside, so a plain function would do.)
 export async function EventGrid({ events }: { events: EventWithDetails[] }) {
   return (
     // Responsive grid: 1 column on phones, 2 from `sm` (640px), 3 from `lg` (1024px).
@@ -18,9 +22,8 @@ export async function EventGrid({ events }: { events: EventWithDetails[] }) {
        * React needs a unique, stable `key` on each item to know which item is
        * which when the list changes. Use an id, not the array index.
        *
-       * Note: the mock data includes a `draft` event (e13), and nothing filters
-       * it out yet. Later: `events.filter((e) => e.status === 'published')`,
-       * or a WHERE clause in the database query.
+       * Drafts and cancelled events never get here: the database query already filters
+       * `status = 'published'` (see db/queries/events.ts). Filter in the query, not in the UI.
        */}
       {events.map((event) => (
         <EventCard key={event.id} event={event} />

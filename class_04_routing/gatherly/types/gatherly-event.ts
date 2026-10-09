@@ -1,3 +1,8 @@
+// ⚠️ LEGACY — nothing imports this file anymore. The pages now use `EventWithDetails`, a type
+// inferred from the database query (db/queries/events.ts).
+// It is also BROKEN: `Event` no longer exists in db/schema.ts (renamed to `GatherlyEvent`),
+// so TypeScript reports an error here. Fix it by deleting this file (and mocks/), or by
+// importing `GatherlyEvent` instead.
 /**
  * GatherlyEvent — what the UI needs to show one event card.
  *

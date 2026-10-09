@@ -226,6 +226,7 @@ In-class examples and exercises are organized by session (e.g. `class_01_intro/`
 | [01 — Introduction](./class_01_intro) | App Router, routing, layouts, Server vs Client Components, rendering, Tailwind |
 | [02 — Essentials](./class_02_essentials) | Where code runs, streaming with Suspense, error.tsx / not-found.tsx, Gatherly layout, mock data and event grid |
 | [03 — Database](./class_03_db) | PostgreSQL (install on Mac/Windows or Docker), Drizzle ORM schema, migrations, connection string |
+| [04 — Routing & Search](./class_04_routing) | Seeding with faker, queries layer, dynamic route `[slug]`, nested layout, search params (URL as state), Zod |
 
 To run any of them:
 

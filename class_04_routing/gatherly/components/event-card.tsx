@@ -5,14 +5,12 @@
  * is composed from <Card>, <Badge> and <Button>, and uses the helpers in
  * lib/format.ts to show dates and prices the way people read them.
  *
- * Props: `{ event: GatherlyEvent }`. TypeScript knows every field on `event`,
+ * Props: `{ event: EventWithDetails }`, the type inferred from our database query
+ * (db/queries/events.ts). TypeScript knows every field on `event`,
  * so a typo like `event.titel` is an error in the editor, not a bug in the
  * browser.
  */
 import Link from 'next/link';
-// `import type`: we only need the TYPE, never a runtime value. The import is
-// removed from the compiled JS. The ESLint rule `consistent-type-imports`
-// enforces this.
 import Image from 'next/image';
 // shadcn/ui components live in components/ui/ — our own files, copied by the CLI.
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from './ui/card';
@@ -21,6 +19,8 @@ import { Badge } from './ui/badge';
 import { formatEventDate, formatPrice } from '../lib/format';
 // A Client Component (has state) rendered inside this Server Component.
 import { FavouriteButton } from './favourite-button';
+// `import type`: we only need the TYPE, never a runtime value. The import is removed from the
+// compiled JS. The ESLint rule `consistent-type-imports` enforces this.
 import type { EventWithDetails } from '../db/queries/events';
 
 export function EventCard({ event }: { event: EventWithDetails }) {
@@ -28,8 +28,14 @@ export function EventCard({ event }: { event: EventWithDetails }) {
     // `pt-0` overrides the Card's default top padding (cn() resolves the conflict),
     // so the cover image can touch the top edge of the card.
     <Card className="pt-0">
-      {/* temporary link: TODO: replace with event details link */}
       {/*
+       * `coverImageUrl` is nullable in the database, so we render the image link only when
+       * there is one. (The details page uses <EventCover> to show a placeholder instead.)
+       *
+       * The link goes to the details page: /events/<slug>, built with a template string.
+       * Both this link and the title link below use the slug, the same one the dynamic route
+       * app/events/[slug]/page.tsx reads from the URL.
+       *
        * `fill` makes the image fill its parent instead of using fixed width/height.
        * It only works when the parent is `relative` and has a size, which is why
        * the link has `relative` + `aspect-video` (16:9). `object-cover` crops the
@@ -59,6 +65,7 @@ export function EventCard({ event }: { event: EventWithDetails }) {
           ))}
         </div>
         <CardTitle>
+          {/* Second link to the same page: the title is clickable too. */}
           <Link href={`/events/${event.slug}`} className="hover:underline">
             {event.title}
           </Link>

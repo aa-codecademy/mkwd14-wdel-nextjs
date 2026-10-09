@@ -2,6 +2,10 @@
 
 Each homework has its own file here, added after the class it belongs to (`hmw_1.md`, `hmw_2.md`, …).
 
+| Homework                            | Topic                                              | After class |
+| ----------------------------------- | -------------------------------------------------- | ----------- |
+| [Homework 1](./hmw_1.md)            | 🎲 Game Night: a Wordle-style word game            | 4           |
+
 ## How to submit
 
 1. Keep your work in **your own GitHub repository** — one repository for the whole course is easiest, since every homework builds on the same app.

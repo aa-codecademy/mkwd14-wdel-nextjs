@@ -1,11 +1,12 @@
 /**
  * MOCK DATA — fake events so we can build the UI before we have a database.
  *
- * The pages still read from this file. In class 03 the database (db/schema.ts) and its
- * migrations were added, and the mock objects now have the same shape as database rows
- * (that's why they carry `createdAt`, `email`, `handle`, ...). So once the tables are filled
- * with this data (a seed script), swapping `events` for a database query won't need changes
- * in the components.
+ * ⚠️ LEGACY since class 04: the pages read events from the DATABASE now (filled by
+ * `npm run db:seed`), so nothing imports this file anymore. It's also broken: it imports the
+ * `Event` type, which db/schema.ts renamed to `GatherlyEvent`, so `npm run typecheck` reports
+ * an error here. Delete this folder, or fix the import, to get a clean typecheck.
+ *
+ * (In class 02-03 this file fed the pages while the database didn't exist yet.)
  *
  * It's a regular TypeScript module, imported only by Server Components, so it
  * never ends up in the browser's JS bundle.

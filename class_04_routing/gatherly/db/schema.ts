@@ -141,6 +141,10 @@ export const categoriesRelations = relations(categories, ({ many }) => ({
   eventCategories: many(eventCategories),
 }));
 
+// NEW in class 04: the relations of the JOIN table. They let a query go from an event to its
+// categories (events -> eventCategories -> category), which `db/queries/events.ts` needs for
+// `with: { eventCategories: { with: { category: true } } }`. Without them Drizzle wouldn't
+// know how to load `category` through `eventCategories`.
 export const eventCategoriesRelations = relations(eventCategories, ({ one }) => ({
   event: one(events, { fields: [eventCategories.eventId], references: [events.id] }),
   category: one(categories, { fields: [eventCategories.categoryId], references: [categories.id] }),
@@ -153,4 +157,7 @@ export const eventCategoriesRelations = relations(eventCategories, ({ one }) => 
 export type User = typeof users.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Venue = typeof venues.$inferSelect;
+// Renamed in class 04 (it was `Event`): this is the type of a plain `events` ROW.
+// Heads-up: types/gatherly-event.ts and mocks/mock-events.ts still import the old name
+// `Event`, which is why `npm run typecheck` reports errors. They're unused leftovers now.
 export type GatherlyEvent = typeof events.$inferSelect;
