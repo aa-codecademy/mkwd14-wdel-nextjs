@@ -23,8 +23,11 @@
  */
 // Relative imports. `@/components/event-results` would point to the same file —
 // see the "@/*" alias note in components/event-grid.tsx.
+import { CategoryLinks } from '../../components/category-links';
 import { EventResults } from '../../components/event-results';
+import { FilterForm } from '../../components/filter-form';
 import { SearchBox } from '../../components/search-box';
+import { getFilterOptions } from '../../db/queries/events';
 import { parseEventFilters } from '../../lib/event-filters';
 
 // `searchParams` is a Promise (like `params`), so the component is async and awaits it.
@@ -33,6 +36,7 @@ import { parseEventFilters } from '../../lib/event-filters';
 export default async function EventsPage({ searchParams }: PageProps<'/events'>) {
   // Never trust the URL: parse it into a clean object ({ q?: string }).
   const filters = parseEventFilters(await searchParams);
+  const { cities, categories } = await getFilterOptions();
 
   return (
     <div>
@@ -47,6 +51,8 @@ export default async function EventsPage({ searchParams }: PageProps<'/events'>)
       <div className="mb-8 space-y-4">
         {/* Client Component: needs the browser (typing, router). Everything else here stays on the server. */}
         <SearchBox />
+        <CategoryLinks filters={filters} categories={categories} />
+        <FilterForm filters={filters} cities={cities} />
       </div>
 
       {/* Server Component that queries the database. We pass the CLEAN filters, not the raw URL. */}

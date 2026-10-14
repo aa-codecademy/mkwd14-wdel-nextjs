@@ -11,6 +11,8 @@
 // Zod 4: describe the shape you expect, then parse the data against it.
 import z from 'zod';
 
+export const SORT_BY_OPTIONS = ['date', 'price', 'newest'] as const;
+
 // ?q=a&q=b arrives as ['a', 'b']. We only want ONE value, so take the first.
 const first = (value: unknown) => (Array.isArray(value) ? value[0] : value);
 // `preprocess` runs `first` BEFORE the schema checks the value. `one(schema)` = "one value of this type".
@@ -21,12 +23,51 @@ const filterSchema = z.object({
   // `.catch(undefined)` = "if validation fails for ANY reason, use undefined instead of throwing".
   // So ?q= (empty), ?q=%20%20 (only spaces) or a missing q all become `q: undefined`.
   q: one(z.string().trim().min(1).optional()).catch(undefined),
+  category: one(z.string().min(1).optional()).catch(undefined),
+  city: one(z.string().min(1).optional()).catch(undefined),
+  from: one(z.iso.date().optional()).catch(undefined),
+  sort: one(z.enum(SORT_BY_OPTIONS)).catch('date'),
+  page: one(z.coerce.number().int().min(1)).catch(1),
 });
 
 // `parse` returns the clean object (or throws; it can't here because of `.catch`).
 // Unknown params like ?foo=bar are dropped, because z.object() ignores keys it doesn't know.
 export function parseEventFilters(searchParams: Record<string, string | string[] | undefined>) {
   return filterSchema.parse(searchParams);
+}
+
+export function eventsHref(current: EventFilters, patch: Partial<EventFilters> = {}): string {
+  const next = { ...current, ...patch };
+
+  const params = new URLSearchParams();
+
+  if (next.q) {
+    params.set('q', next.q);
+  }
+
+  if (next.category) {
+    params.set('category', next.category);
+  }
+
+  if (next.city) {
+    params.set('city', next.city);
+  }
+
+  if (next.from) {
+    params.set('from', next.from);
+  }
+
+  if (next.sort !== 'date') {
+    params.set('sort', next.sort);
+  }
+
+  if (next.page > 1) {
+    params.set('page', String(next.page));
+  }
+
+  const query = params.toString();
+
+  return query ? `/events?${query}` : '/events';
 }
 
 // The TypeScript type is DERIVED from the schema, so they can never get out of sync:
