@@ -1,6 +1,6 @@
-import type { EventFilters } from '../lib/event-filters';
+import type { EventFilters } from '../../../../lib/event-filters';
 import Form from 'next/form';
-import { Button } from './ui/button';
+import { Button } from '../../../../components/ui/button';
 
 const fieldClasses = 'h-9 rounded-md border border-border bg-background px-2 text-sm';
 const labelClasses = 'flex flex-col gap-1 text-sm';

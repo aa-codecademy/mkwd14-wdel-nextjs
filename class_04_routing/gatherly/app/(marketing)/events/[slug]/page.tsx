@@ -19,12 +19,12 @@
  */
 import { notFound } from 'next/navigation';
 // Relative imports on purpose here; `@/db/queries/events` would work the same (the `@/` alias).
-import { getEventBySlug } from '../../../db/queries/events';
-import { Badge } from '../../../components/ui/badge';
-import { FavouriteButton } from '../../../components/favourite-button';
-import { formatEventDate, formatPrice } from '../../../lib/format';
+import { getEventBySlug } from '../../../../db/queries/events';
+import { Badge } from '../../../../components/ui/badge';
+import { FavouriteButton } from '../../../../components/favourite-button';
+import { formatEventDate, formatPrice } from '../../../../lib/format';
 // A small component that handles events WITHOUT a cover image. See components/event-cover.tsx.
-import { EventCover } from '../../../components/event-cover';
+import { EventCover } from '../../../../components/event-cover';
 
 // `PageProps<'/events/[slug]'>` is the global helper that types `params` for this exact route.
 export default async function EventPage({ params }: PageProps<'/events/[slug]'>) {

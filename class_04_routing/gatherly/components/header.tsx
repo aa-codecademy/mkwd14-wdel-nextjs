@@ -23,6 +23,12 @@ export function Header() {
           <Link href="/events" className="hover:text-brand-500">
             Events
           </Link>
+          <Link href="/about" className="hover:text-brand-500">
+            About
+          </Link>
+          <Link href="/dashboard" className="hover:text-brand-500">
+            For organizers
+          </Link>
         </nav>
       </div>
     </header>

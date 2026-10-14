@@ -15,7 +15,7 @@
 
 // `use-debounce` (an npm package): delays a function until the user stops typing.
 import { useDebouncedCallback } from 'use-debounce';
-import { Input } from './ui/input';
+import { Input } from '../../../../components/ui/input';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 export function SearchBox() {

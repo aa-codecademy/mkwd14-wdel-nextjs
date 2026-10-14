@@ -7,9 +7,9 @@
  * the results while the rest of the page is already visible.
  */
 import Link from 'next/link';
-import { searchEvents } from '../db/queries/events';
-import { eventsHref, type EventFilters } from '../lib/event-filters';
-import { EventGrid } from './event-grid';
+import { searchEvents } from '../../../../db/queries/events';
+import { eventsHref, type EventFilters } from '../../../../lib/event-filters';
+import { EventGrid } from '../../../../components/event-grid';
 import { Pagination } from './pagination';
 
 export async function EventResults({ filters }: { filters: EventFilters }) {
