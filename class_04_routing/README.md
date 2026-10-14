@@ -40,17 +40,19 @@ Then try these URLs (replace the slug with a real one, see [below](#find-a-real-
 
 ---
 
+> 🆕 **Added later in this class's code:** the app was reorganised into **route groups** (`(marketing)` for the public site, `(dashboard)` for organizers), and `/events` gained **category pills, city / date / sort filters and pagination**, plus an About page and a dashboard placeholder. Those are explained in detail in the **[class 06 README](../class_06_forms/README.md)** (sections 1–5). The sections below describe the first version of the page (search only), but the file paths are the current ones.
+
 ## 🧩 What's new
 
 | Concept                      | Where to read the code                                                              |
 | ---------------------------- | ----------------------------------------------------------------------------------- |
 | Seeding a database           | `db/seed.ts`                                                                        |
 | A queries layer              | `db/queries/events.ts`                                                              |
-| Dynamic route `[slug]`       | `app/events/[slug]/page.tsx`                                                        |
-| Route-specific 404           | `app/events/[slug]/not-found.tsx`                                                   |
-| Nested layout                | `app/events/layout.tsx`                                                             |
-| Search params on the server  | `app/events/page.tsx`                                                               |
-| Search params on the client  | `components/search-box.tsx`                                                         |
+| Dynamic route `[slug]`       | `app/(marketing)/events/[slug]/page.tsx`                                            |
+| Route-specific 404           | `app/(marketing)/events/[slug]/not-found.tsx`                                       |
+| Nested layout                | `app/(marketing)/events/layout.tsx`                                                 |
+| Search params on the server  | `app/(marketing)/events/page.tsx`                                                   |
+| Search params on the client  | `app/(marketing)/events/_components/search-box.tsx`                                 |
 | Validating the URL with Zod  | `lib/event-filters.ts`                                                              |
 | Optional image handling      | `components/event-cover.tsx`                                                        |
 | Relations of the join table  | `db/schema.ts` (`eventCategoriesRelations`)                                         |
@@ -126,7 +128,7 @@ Watch your terminal while using the site: `logger: true` in `db/index.ts` prints
 You met `[id]` in class 1. Now it's a real page:
 
 ```
-app/events/
+app/(marketing)/events/      ← `(marketing)` is a route group: not part of the URL (see below)
 ├── layout.tsx            ← breadcrumb, wraps everything below
 ├── page.tsx              ← /events
 └── [slug]/
@@ -147,15 +149,16 @@ Note that a draft or cancelled event answers **404** too: the query filters `sta
 
 ### 4. A nested layout
 
-`app/events/layout.tsx` wraps **both** `/events` and `/events/[slug]` with a breadcrumb:
+`app/(marketing)/events/layout.tsx` wraps **both** `/events` and `/events/[slug]` with a breadcrumb:
 
 ```
-RootLayout (header + footer)
-  └─ EventsLayout (breadcrumb)          ← stays mounted when you move between the two pages
-       └─ page.tsx or [slug]/page.tsx
+RootLayout (<html>, <body>)
+  └─ MarketingLayout (header + footer)
+       └─ EventsLayout (breadcrumb)     ← stays mounted when you move between the two pages
+            └─ page.tsx or [slug]/page.tsx
 ```
 
-The home page (`/`) isn't inside `app/events/`, so it doesn't get the breadcrumb.
+The home page (`/`) and `/about` aren't inside `events/`, so they don't get the breadcrumb.
 
 ### 5. Search, with the URL as the state
 
@@ -171,7 +174,7 @@ The home page (`/`) isn't inside `app/events/`, so it doesn't get the breadcrumb
 
 There are two sides, and it helps to see them next to each other:
 
-| | **On the server** (`app/events/page.tsx`) | **In the browser** (`components/search-box.tsx`) |
+| | **On the server** (`events/page.tsx`) | **In the browser** (`_components/search-box.tsx`) |
 | --- | --- | --- |
 | How you read the params | the `searchParams` **prop** (a Promise) | the `useSearchParams()` hook |
 | How you change the URL | not possible: the server only reads | `useRouter()` → `router.replace(...)` |
@@ -225,10 +228,9 @@ Heads-up, so you're not surprised when you run `npm run check`:
 | Problem                                                              | Why / how to fix                                                                                       |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `npm run typecheck` fails in `mocks/mock-events.ts` and `types/gatherly-event.ts` | `db/schema.ts` renamed the type `Event` to `GatherlyEvent`, and these two files still import the old name. **Nothing uses them anymore**, so delete the `mocks/` folder and `types/gatherly-event.ts` (or fix the import) |
-| `npm run lint` error: `'inter' is assigned a value but never used`   | A leftover font in `app/layout.tsx` (we use Geist). Delete the unused `Inter` lines                     |
-| `npm run lint` warnings: `console.log` in `components/event-results.tsx` | Debug logs. Remove them before committing                                                          |
+| `npm run typecheck` fails: `app/(marketing)/page.tsx is not a module`  | There are **two files for the home page**: `app/page.tsx` (the hero) and an **empty** `app/(marketing)/page.tsx`. One URL can't have two pages, and an empty file isn't a valid page. Move the hero into `app/(marketing)/page.tsx` and delete `app/page.tsx` |
 
-Note that `next build` also type-checks, so the first problem stops a production build until it's fixed.
+Note that `next build` also type-checks, so these problems stop a production build until they're fixed.
 
 ---
 
@@ -237,9 +239,9 @@ Note that `next build` also type-checks, so the first problem stops a production
 1. Run `npm run db:seed`, then look at the `events` table in Drizzle Studio. How many are `published`? Does that match what `/events` shows?
 2. Open `/events/<slug>` of a **draft** event. Why do you get a 404?
 3. Search for `%` or `_` in the box. What happens, and why is it still not a security problem?
-4. Add a **"No events found"** message: in `EventGrid`, show text when `events.length === 0`.
-5. Add a **loading state**: wrap `<EventResults />` in `<Suspense fallback={...}>` in `app/events/page.tsx` and see what the user sees while the query runs (add a short `sleep` in the query to notice it).
-6. Add a **category filter** `?category=meetup`: extend `filterSchema`, then use it in `searchEvents` (hint: you'll need to filter through the `event_categories` table).
+4. Add a **"No events found"** message when the search has no results. (The final code already has one in `_components/event-results.tsx`: try yours first, then compare.)
+5. Add a **loading state** with `<Suspense fallback={...}>` around `<EventResults />` and see what the user sees while the query runs (add a short `sleep` in the query to notice it). The class 06 code does this with a skeleton.
+6. Add a **category filter** `?category=meetup`: extend `filterSchema`, then use it in `searchEvents` (hint: you'll need to filter through the `event_categories` table). The final code has it, so compare your solution with `browseConditions` in `db/queries/events.ts`.
 7. Fix the **known issues** above until `npm run check` passes.
 8. Show the **event title in the breadcrumb** on the details page. (Hint: the layout receives `params` too, but it can't know the title without querying.)
 

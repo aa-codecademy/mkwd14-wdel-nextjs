@@ -19,6 +19,7 @@ export function Header() {
           Gatherly
         </Link>
         {/* <nav> tells screen readers "this is the main navigation". */}
+        {/* Three links: the public pages, plus the organizer area (a different route group). */}
         <nav className="flex gap-6 text-sm font-medium">
           <Link href="/events" className="hover:text-brand-500">
             Events

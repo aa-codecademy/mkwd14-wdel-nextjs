@@ -1,247 +1,234 @@
-# Class 04 — Real Data, Dynamic Routes & Search
+# Class 06 — Route Groups, Filters, Streaming & the Organizer Dashboard
 
-Until now Gatherly's pages showed **mock data** from a TypeScript file. In this class the pages read from the **PostgreSQL database** we set up in class 3:
+In class 4 the `/events` page got real data, a details page and a search box. This folder builds on that and turns Gatherly into a **bigger app with two different "shells"**:
 
-- we **fill the database** with fake data (a seed script),
-- we **query it** with Drizzle in one organised place,
-- we add an **event details page** (`/events/some-event`) using a **dynamic route**,
-- we add **search** (`/events?q=next`) where the **URL is the state**,
-- and we **validate** what comes from the URL with Zod.
+- the **public site** (header + footer) and the **organizer dashboard** (sidebar), living side by side with clean URLs thanks to **route groups**,
+- a proper **events browser**: category pills, city / date / sort filters and **pagination**, all driven by the URL,
+- **streaming** the results with `<Suspense>` and a **skeleton** while they load,
+- and the first screen of the **dashboard**, with the organizer's events and **form placeholders** for what comes next.
+
+> 🧭 **Where we are:** the *browsing* side is complete. The dashboard is a **scaffold**: the Publish / Unpublish button sits inside a `<form>` that doesn't do anything yet, "New event" points to a page that doesn't exist, and nobody is signed in. Those are the places where forms plug in next (the folder is called `class_06_forms`).
 
 ## 📁 What's in this folder
 
-| Folder                    | What it is                                                                                        |
-| ------------------------- | ------------------------------------------------------------------------------------------------- |
-| [`gatherly/`](./gatherly) | The course app at the end of class 4. Every new file has comments written for students, so read the code next to this README |
+| Folder                    | What it is                                                                                         |
+| ------------------------- | -------------------------------------------------------------------------------------------------- |
+| [`gatherly/`](./gatherly) | The course app at this point. Every new file has comments written for students, so read the code next to this README |
 
 ## 🚀 Run it
 
-You need the PostgreSQL server from class 3 running. If you don't have it yet, follow the **[class 03 README](../class_03_db/README.md)** first (Step 1 and Step 2).
+You need the PostgreSQL server from class 3 running ([class 03 README](../class_03_db/README.md), Steps 1–2).
 
 ```bash
-cd class_04_routing/gatherly
-npm install                  # new packages: zod, use-debounce, @faker-js/faker
+cd class_06_forms/gatherly
+npm install
 cp .env.example .env         # skip if you already have .env (Windows PowerShell: Copy-Item .env.example .env)
-npm run db:migrate           # creates the tables (safe to run again)
-npm run db:seed              # fills them with fake data
+npm run db:migrate
+npm run db:seed              # run once; it ADDS rows each time (see the class 04 README for how to reset)
 npm run dev
 ```
 
-Then try these URLs (replace the slug with a real one, see [below](#find-a-real-slug)):
+> ⚠️ **Read [Known issues](#known-issues-in-this-snapshot) first.** In this snapshot a wrong import stops the app from building, and there are two files for the home page. Each one is a one-line fix, explained below.
 
-| URL                                                     | What you should see                                              |
-| ------------------------------------------------------- | ---------------------------------------------------------------- |
-| [/events](http://localhost:3000/events)                 | The published events, soonest first, with a search box           |
-| [/events?q=a](http://localhost:3000/events?q=a)         | Only events whose title contains "a" (any letter case)           |
-| [/events?q=](http://localhost:3000/events?q=)           | The same as no search (empty input is ignored)                   |
-| [/events?q=a&q=b](http://localhost:3000/events?q=a&q=b) | Uses only the first value ("a"). It never crashes                |
-| `/events/<a-real-slug>`                                 | The event details page                                           |
-| [/events/does-not-exist](http://localhost:3000/events/does-not-exist) | The event 404 page                                 |
+| URL                                                                                | What you should see                                                       |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [/events](http://localhost:3000/events)                                            | Events with a search box, category pills, filters and pagination          |
+| [/events?category=meetup](http://localhost:3000/events?category=meetup)            | Only one category (use a slug from your seeded data)                      |
+| [/events?sort=price&page=2](http://localhost:3000/events?sort=price&page=2)        | Cheapest first, second page                                               |
+| [/events?page=999](http://localhost:3000/events?page=999)                          | "There are only N pages of results", with a link to the last page         |
+| [/events?q=zzzzzz](http://localhost:3000/events?q=zzzzzz)                          | "No events match these filters", with a link to clear them                |
+| [/about](http://localhost:3000/about)                                              | A static page inside the public layout                                    |
+| [/dashboard](http://localhost:3000/dashboard)                                      | The organizer's events, in a layout with a sidebar                        |
 
 ---
 
 ## 🧩 What's new
 
-| Concept                      | Where to read the code                                                              |
-| ---------------------------- | ----------------------------------------------------------------------------------- |
-| Seeding a database           | `db/seed.ts`                                                                        |
-| A queries layer              | `db/queries/events.ts`                                                              |
-| Dynamic route `[slug]`       | `app/events/[slug]/page.tsx`                                                        |
-| Route-specific 404           | `app/events/[slug]/not-found.tsx`                                                   |
-| Nested layout                | `app/events/layout.tsx`                                                             |
-| Search params on the server  | `app/events/page.tsx`                                                               |
-| Search params on the client  | `components/search-box.tsx`                                                         |
-| Validating the URL with Zod  | `lib/event-filters.ts`                                                              |
-| Optional image handling      | `components/event-cover.tsx`                                                        |
-| Relations of the join table  | `db/schema.ts` (`eventCategoriesRelations`)                                         |
+| Concept                              | Where to read the code                                                              |
+| ------------------------------------ | ----------------------------------------------------------------------------------- |
+| Route groups `(marketing)` / `(dashboard)` | `app/(marketing)/layout.tsx`, `app/(dashboard)/layout.tsx`, `app/layout.tsx`  |
+| Private folders `_components`        | `app/(marketing)/events/_components/`                                               |
+| Filters in the URL                   | `lib/event-filters.ts`, `_components/category-links.tsx`, `_components/filter-form.tsx` |
+| Pagination                           | `db/queries/events.ts` (`searchEvents`), `_components/pagination.tsx`               |
+| Empty states                         | `_components/event-results.tsx`                                                     |
+| Building a query from filters        | `db/queries/events.ts` (`browseConditions`, `sortOrder`, `getFilterOptions`)        |
+| Streaming with Suspense + skeleton   | `app/(marketing)/events/page.tsx`, `components/event-grid-skeleton.tsx`             |
+| The dashboard                        | `app/(dashboard)/dashboard/page.tsx`, `db/queries/dashboard.ts`                     |
 
-### 1. Seeding the database
+### 1. Route groups: several layouts, one set of URLs
 
-An empty database means empty pages. A **seed script** inserts sample data so everyone develops against the same kind of data. Ours uses [`@faker-js/faker`](https://fakerjs.dev/) to generate 15 users, 8 categories, 10 venues and 30 events.
+A folder name in **parentheses** is a **route group**: it organises files and shares a layout, but it is **not part of the URL**.
 
-```bash
-npm run db:seed
+```
+app/
+├── layout.tsx                      ← root: only <html>, <body>, fonts, metadata
+├── (marketing)/                    ← the public site
+│   ├── layout.tsx                  ← header + centred <main> + footer
+│   ├── page.tsx                    ← "/"            (the home page)
+│   ├── about/page.tsx              ← "/about"
+│   └── events/
+│       ├── layout.tsx              ← breadcrumb
+│       ├── page.tsx                ← "/events"
+│       ├── _components/            ← private folder: not a route
+│       └── [slug]/page.tsx         ← "/events/some-event"
+└── (dashboard)/                    ← the organizer area
+    ├── layout.tsx                  ← sidebar, no site header
+    └── dashboard/
+        └── page.tsx                ← "/dashboard"
 ```
 
-Things worth understanding (the file has comments for each):
+Why? Before, the header and footer lived in the root layout, so **every** page had them. A dashboard shouldn't. With groups, each part of the app gets its own frame and nothing leaks between them:
 
-- **Order matters** because of foreign keys: users, categories and venues first, then events (they point at users and venues), then the `event_categories` links.
-- It runs inside a **transaction**: all inserts succeed, or none do. No half-filled tables if something fails.
-- `.returning()` gives back the ids PostgreSQL generated, so we can use them in the next insert.
-- The data is **random**, and so are the statuses (`draft` / `published` / `cancelled`). Only about **a third of the events are published**, and the site only shows published ones. If a page looks emptier than you expected, that's why.
-- It is a **standalone script** (run by `tsx`), not part of Next.js. It builds its own connection because `db/index.ts` is marked `server-only`, which would throw outside Next.js.
-
-#### Reset the data
-
-Running the seed twice **adds** another set. To start from scratch, empty the tables, then seed again:
-
-```sql
-TRUNCATE TABLE event_categories, events, venues, categories, users;
+```
+/events     RootLayout ─► MarketingLayout (header, footer) ─► EventsLayout (breadcrumb) ─► page
+/dashboard  RootLayout ─► DashboardLayout (sidebar)                                      ─► page
 ```
 
-Run it in `psql` (`psql "<your DATABASE_URL>"`), or with Docker:
+Things to remember:
 
-```bash
-docker exec -it gatherly-db psql -U postgres -d gatherly -c "TRUNCATE TABLE event_categories, events, venues, categories, users;"
-```
+- The group name **never appears in the URL**. That's why the folder is `(dashboard)/dashboard/`: the outer one is the group, the inner one gives the URL `/dashboard`.
+- **Two pages can't resolve to the same URL.** `app/page.tsx` and `app/(marketing)/page.tsx` would both be `/`, which Next.js doesn't allow. (That's one of the [known issues](#known-issues-in-this-snapshot).)
+- The **root layout** is the only one that renders `<html>` and `<body>`. Groups add frames *inside* it.
+- Layouts stay mounted while you move between pages of the same group. Moving to the *other* group changes the whole shell.
 
-#### Find a real slug
+### 2. Private folders: `_components`
 
-The seeded slugs are random words, so look one up:
+A folder that starts with an **underscore** is **never a route**. `app/(marketing)/events/_components/` keeps the pieces that only belong to the events page right next to it (instead of the global `components/` folder), and `/events/_components/...` is not reachable as a URL. (Files that aren't named `page.tsx` or `route.ts` are not routes anyway; the underscore makes the intent obvious and keeps the folder out of routing completely.)
 
-```bash
-psql "<your DATABASE_URL>" -c "SELECT slug, title FROM events WHERE status = 'published' LIMIT 5;"
-```
+### 3. Filters, all in the URL
 
-or open `npm run db:studio` and look at the `events` table. Then visit `http://localhost:3000/events/<slug>`.
+Every control on the page changes the URL, and the server re-renders. There are **three different mechanisms**, each the simplest one that works:
 
-### 2. A queries layer: `db/queries/events.ts`
+| Control                 | Mechanism                                              | Client JavaScript? |
+| ----------------------- | ------------------------------------------------------ | ------------------ |
+| Search box (`?q=`)      | `useRouter().replace()` after a debounce               | yes (needs to react while typing) |
+| Category pills          | plain `<Link href="/events?category=meetup">`          | no                 |
+| City / date / sort      | a `<Form>` from `next/form` that submits with GET      | no                 |
 
-Pages don't talk to Drizzle directly. They call small functions:
+**`next/form`'s `<Form>`** is a `<form>` that, when submitted with GET, turns into a client-side **navigation** to `/events?city=...&from=...&sort=...`: no full reload, layouts stay mounted, and it even works without JavaScript. The `name` of each field becomes the key in the query string.
+
+A GET form **replaces the whole query string** with its own fields, so to keep the search text and the category the form re-sends them as **hidden inputs**. (`page` is left out on purpose: a new filter starts on page 1.)
+
+**`eventsHref(filters, patch)`** (in `lib/event-filters.ts`) builds a `/events` URL from the current filters, changing only what's in `patch`. Every pill and pagination link uses it, so none of them hand-writes a query string, and they all keep the user's other filters. It leaves out defaults, so URLs stay clean (no `?sort=date`, no `?page=1`).
+
+**The Zod schema grew too**, and it's still **forgiving**: anything invalid falls back to a default instead of crashing the page.
+
+| Param      | Rule in the schema                                      | What `?x=garbage` becomes |
+| ---------- | ------------------------------------------------------- | ------------------------- |
+| `q`        | trimmed text, at least 1 character                      | no filter                 |
+| `category`, `city` | any non-empty text                              | matches nothing, no crash |
+| `from`     | `z.iso.date()`, a real date as `YYYY-MM-DD`             | no filter                 |
+| `sort`     | `z.enum(['date', 'price', 'newest'])`                   | `'date'`                  |
+| `page`     | `z.coerce.number().int().min(1)`, "3" → 3               | `1`                       |
+
+`z.coerce` converts first (URL values are always strings), then checks. `.catch(value)` supplies the fallback.
+
+### 4. Pagination
+
+Showing 30 events at once doesn't scale, so we show **one page of 6** (`PAGE_SIZE`). In SQL that's **`LIMIT` + `OFFSET`**:
+
+| Page | `limit` | `offset` = (page − 1) × 6 |
+| ---- | ------- | ------------------------- |
+| 1    | 6       | 0                         |
+| 2    | 6       | 6                         |
+| 3    | 6       | 12                        |
+
+To show "Page 2 of 5" we also need the **total** number of matching events, not just this page: `db.$count(events, where)` runs `SELECT count(*) ... WHERE ...` with the **same** `where`, so the two always agree. `pageCount = Math.ceil(total / PAGE_SIZE)`, with a minimum of 1.
+
+Both queries are independent, so they run **at the same time** with `Promise.all([...])`: the page waits for the slower one, not for the sum of both.
+
+**Handle the empty cases.** `EventResults` decides between three outcomes:
+
+1. results on this page → count, grid, pagination;
+2. **page past the end** (`?page=99`, or searching while on page 3) → "There are only N pages", with a link to the last page. The check `events.length === 0 && total > 0` is what tells this apart from...
+3. **nothing matches** → "No events match these filters", with a link to clear them.
+
+> 💡 Heads-up: typing in the search box **keeps** the current `page`. A cleaner behaviour is to go back to page 1 on every new search (`next.delete('page')` in `search-box.tsx`). Try it as an exercise.
+
+### 5. Building a query from filters
+
+`browseConditions(filters)` in `db/queries/events.ts` starts with the rule that always applies (`status = 'published'`) and **adds one condition per filter the user set**, then joins them with `and(...)`:
 
 ```ts
-const events = await searchEvents({ q: 'next' });     // for the list
-const event  = await getEventBySlug('some-slug');     // for the details page
+const conditions = [eq(events.status, 'published')];
+if (filters.q)    conditions.push(ilike(events.title, `%${filters.q}%`));
+if (filters.city) conditions.push(eq(events.city, filters.city));
+// ...
+return and(...conditions);
 ```
 
-Why? The rules live in **one place** ("only `published` events are public"), pages stay readable, and swapping or tuning a query never touches the UI.
+New pieces to recognise:
 
-What you'll meet in that file:
+- **`gte`** is `>=` (events starting on or after `?from=`).
+- **A subquery for the category.** Events and categories are many-to-many (the `event_categories` join table), so we filter with `WHERE events.id IN (SELECT event_id FROM event_categories JOIN categories ... WHERE slug = 'meetup')`. In Drizzle: build the inner `db.select(...)` **without awaiting it** and pass it to `inArray(events.id, inCategory)`.
+- **`sortOrder`**: a lookup object from the `?sort=` value to an `ORDER BY`. The second column is a **tie-breaker** (equal prices are ordered by date).
+- **`selectDistinct`** in `getFilterOptions()`: `SELECT DISTINCT city` returns each city once. The filter controls are built from the **database**, so a new city or category appears without touching the UI code.
 
-| Piece                                  | Meaning                                                                                           |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `db.query.events.findMany({ ... })`    | Drizzle's **relational query API**: returns many rows. `findFirst` returns one (or `undefined`)   |
-| `with: { venue: true, ... }`           | **Load related rows together** with each event. Uses the relations from `db/schema.ts`            |
-| `eq`, `and`, `ilike`, `asc`            | Helpers that become SQL: `=`, `AND`, `ILIKE` (case-insensitive "contains"), `ORDER BY ... ASC`    |
-| `limit: 50`                            | A safety cap, so a huge table can't load all at once                                              |
-| `organizer: { columns: { id, name, handle } }` | Load **only** the columns the public page needs. The organizer's email never leaves the server |
-| `EventWithDetails`                     | A TypeScript type **inferred from the query**. Change the query and the type follows              |
+Run it and watch your terminal: `logger: true` prints the real SQL for each filter combination.
 
-Watch your terminal while using the site: `logger: true` in `db/index.ts` prints the **SQL** Drizzle sends. Try searching and look at the `WHERE` clause.
+### 6. Streaming with `<Suspense>` and a skeleton
 
-> 🔒 The search text goes to PostgreSQL as a **parameter**, never concatenated into the SQL string, so it can't be used for SQL injection. That's the main reason to use a query builder or ORM instead of building SQL strings by hand.
+Recall class 02's `/streaming` example. The events page now does the same for real:
 
-### 3. A dynamic route: `/events/[slug]`
-
-You met `[id]` in class 1. Now it's a real page:
-
-```
-app/events/
-├── layout.tsx            ← breadcrumb, wraps everything below
-├── page.tsx              ← /events
-└── [slug]/
-    ├── page.tsx          ← /events/nextjs-conf-skopje-2027
-    └── not-found.tsx     ← shown when this page calls notFound()
+```tsx
+<Suspense key={JSON.stringify(filters)} fallback={<EventGridSkeleton />}>
+  <EventResults filters={filters} />
+</Suspense>
 ```
 
-The flow for `/events/some-slug`:
+`EventResults` awaits the database, so it *suspends*. Everything outside the boundary (heading, search box, filters) is sent to the browser immediately, the **skeleton** shows in the gap, and the real grid is streamed in when its query finishes.
 
-1. `const { slug } = await params;`: `params` is a **Promise**, always `await` it.
-2. `getEventBySlug(slug)` asks the database.
-3. Nothing found → `notFound()` → the nearest `not-found.tsx` is rendered, with an HTTP **404** status.
-4. Otherwise render the page.
+- **A good skeleton has the same shape** as what it replaces (same grid, image, title line), so nothing jumps when the real cards arrive. `Skeleton` is a shadcn component (`npx shadcn@latest add skeleton`): a grey box with `animate-pulse`.
+- **Why the `key`?** A boundary shows its fallback only the *first* time. Without the `key`, changing a filter would keep showing the **old** results until the new ones are ready, with no sign of loading. A `key` that changes with the filters tells React "new boundary", so the skeleton appears on every search, filter and page change.
+- Note that `getFilterOptions()` is awaited **outside** the boundary, so the page shell still waits for that one (small, fast) query.
 
-**Why a slug and not the id?** The id is a random uuid. A [slug](https://developer.mozilla.org/en-US/docs/Glossary/Slug) like `nextjs-conf-skopje-2027` is readable, friendly in links and better for SEO. It's a `unique` column, so one slug = one event.
+### 7. The dashboard (a scaffold)
 
-Note that a draft or cancelled event answers **404** too: the query filters `status = 'published'`, so unpublished events are not reachable by guessing the URL.
+`/dashboard` lists the organizer's events, newest first, with a status badge. Worth noticing:
 
-### 4. A nested layout
+- It's in the **(dashboard)** group, so it gets the **sidebar** layout, not the site header. The header just has a "For organizers" link to it.
+- **`buttonVariants()`** gives a `<Link>` the look of a button. "New event" *navigates*, so it must be a link, not a `<button>`.
+- Only **published** events link to their public page. A draft's `/events/<slug>` would be a 404.
+- Its query (`db/queries/dashboard.ts`) is **not** limited to published events (an organizer must see drafts), and it selects only the columns the list shows.
 
-`app/events/layout.tsx` wraps **both** `/events` and `/events/[slug]` with a breadcrumb:
+What is still a **placeholder**:
 
-```
-RootLayout (header + footer)
-  └─ EventsLayout (breadcrumb)          ← stays mounted when you move between the two pages
-       └─ page.tsx or [slug]/page.tsx
-```
+| Placeholder                                      | What it will become                                                         |
+| ------------------------------------------------ | --------------------------------------------------------------------------- |
+| "Signed in as JohnDoe"                           | The real signed-in organizer                                                |
+| `getOrganizerEvents('')` returns **everyone's** events | Only the signed-in organizer's own events (the `where` is commented out) |
+| `<form action="">` around Publish / Unpublish    | A form action that updates the event's status                               |
+| "New event" → `/dashboard/events/new` (404 today) | A form to create an event (an empty `events/` folder is waiting for it)    |
 
-The home page (`/`) isn't inside `app/events/`, so it doesn't get the breadcrumb.
-
-### 5. Search, with the URL as the state
-
-```
- user types ──► SearchBox (Client) ──► URL becomes /events?q=next
-                                            │
-                       Next.js re-renders the SERVER page with searchParams = { q: 'next' }
-                                            │
-          parseEventFilters() ──► EventResults (Server) ──► database ──► grid
-```
-
-**Why put the search in the URL instead of `useState`?** The URL can be shared and bookmarked, the Back button works, a refresh keeps the results, and the **server** can read it, so only the matching rows are fetched.
-
-There are two sides, and it helps to see them next to each other:
-
-| | **On the server** (`app/events/page.tsx`) | **In the browser** (`components/search-box.tsx`) |
-| --- | --- | --- |
-| How you read the params | the `searchParams` **prop** (a Promise) | the `useSearchParams()` hook |
-| How you change the URL | not possible: the server only reads | `useRouter()` → `router.replace(...)` |
-| Needs `'use client'`? | no | yes |
-
-Details worth remembering:
-
-- **Debounce** (`use-debounce`): wait until the user pauses typing (500 ms) before changing the URL. Without it, typing "next" runs 4 database queries instead of 1.
-- **`router.replace`, not `push`:** typing shouldn't add a history entry per search, or the Back button would step through every term.
-- **`defaultValue`, not `value`:** the input is *uncontrolled*. The browser owns the text while typing, and we only set the starting value, so a shared link shows the search in the box.
-- **`URLSearchParams`:** the built-in class for building and encoding query strings (`rock & roll` → `rock+%26+roll`).
-- The component copies the **existing params** before changing `q`, so other filters we add later are kept.
-
-### 6. Never trust the URL: validate with Zod
-
-Anything in the URL is **user input**. It can be missing, empty, repeated (`?q=a&q=b`) or garbage. `lib/event-filters.ts` turns it into a clean typed object:
-
-```ts
-const filters = parseEventFilters(await searchParams);   // { q?: string }
-```
-
-- `z.preprocess(first, ...)`: if the value is an array, take the first item.
-- `.trim().min(1).optional()`: a non-empty text, or nothing.
-- `.catch(undefined)`: if anything is wrong, treat it as "no filter" instead of crashing.
-- `z.infer<typeof schema>`: the TypeScript type is **derived from the schema**, so they never drift apart.
-
-Rule for **pages:** be forgiving (bad input → no filter). Later, for **APIs and forms**, we'll be strict and answer with an error.
-
-### 7. Smaller things in this class
-
-- **Nullable cover image:** `coverImageUrl` can be `null` in the database. `EventCover` shows a coloured placeholder instead of crashing.
-- **`preload`** on the main image of the details page loads it first. (It replaces the old `priority` prop in Next.js 16.)
-- **More image hosts:** the seeded images come from other hosts, so `next.config.ts` now allows `picsum.photos` and `loremflickr.com` in `images.remotePatterns`.
-- **A shadcn `Input`:** added with `npx shadcn@latest add input` (see [class 02, section 6](../class_02_essentials/README.md#6-shadcnui--installing-and-using-it-step-by-step)).
-- **`server-only`:** `db/queries/events.ts` can't be imported by a Client Component. The build fails instead of leaking the database code to the browser.
-
-### New packages
-
-| Package               | Why                                                                |
-| --------------------- | ------------------------------------------------------------------ |
-| `zod`                 | Validate and parse data (here: the search params)                  |
-| `use-debounce`        | Delay a function until the user stops typing                       |
-| `@faker-js/faker` (dev) | Generate fake data for the seed script                           |
+> 🔒 **Important rule for later:** a dashboard query must **always** be limited to the current user. Returning all rows "for now" is fine on a laptop and a serious data leak in production.
 
 ---
 
-## ⚠️ Known issues in this snapshot
+## Known issues in this snapshot
 
-Heads-up, so you're not surprised when you run `npm run check`:
+Run `npm run check` and `npm run build` and you'll meet these. Fix them, in this order:
 
-| Problem                                                              | Why / how to fix                                                                                       |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `npm run typecheck` fails in `mocks/mock-events.ts` and `types/gatherly-event.ts` | `db/schema.ts` renamed the type `Event` to `GatherlyEvent`, and these two files still import the old name. **Nothing uses them anymore**, so delete the `mocks/` folder and `types/gatherly-event.ts` (or fix the import) |
-| `npm run lint` error: `'inter' is assigned a value but never used`   | A leftover font in `app/layout.tsx` (we use Geist). Delete the unused `Inter` lines                     |
-| `npm run lint` warnings: `console.log` in `components/event-results.tsx` | Debug logs. Remove them before committing                                                          |
-
-Note that `next build` also type-checks, so the first problem stops a production build until it's fixed.
+| Problem                                                                 | Why / how to fix                                                                                  |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `Module not found: Can't resolve '@/node_modules/@types/pg'` (the build fails; `db/index.ts`, `db/seed.ts`) | An editor auto-import picked a path inside `node_modules/@types`, which only has type definitions. Use `import { Pool } from 'pg';` in both files (class 04 has it right) |
+| Two files for the home page: `app/page.tsx` **and** an **empty** `app/(marketing)/page.tsx` | One URL can't have two pages, and an empty file isn't a valid page. Move the hero from `app/page.tsx` into `app/(marketing)/page.tsx` and delete `app/page.tsx`, so `/` gets the header and footer too |
+| `npm run typecheck` fails in `mocks/mock-events.ts` and `types/gatherly-event.ts` | They import the old type name `Event` (now `GatherlyEvent`) and **nothing uses them** anymore. Delete the `mocks/` folder and `types/gatherly-event.ts` |
+| `npm run lint`: `'eq' is defined but never used`, `'organizerId' is defined but never used` (`db/queries/dashboard.ts`) | They belong to the commented-out `where`. They'll be used once sign-in exists. Until then prefix the argument with `_` and remove the `eq` import |
+| Nit: `db/queries/dashboard.ts` has no `import 'server-only'` and imports `db` from `'..'` | Add `import 'server-only';` like `db/queries/events.ts`, so a Client Component can't import it |
+| Inter isn't actually applied (`app/layout.tsx`)                         | `font-sans` reads `--font-sans`, but the layout defines `--font-inter`. Set `--font-sans: var(--font-inter)` in `globals.css` |
 
 ---
 
 ## 🏋️ Try it yourself
 
-1. Run `npm run db:seed`, then look at the `events` table in Drizzle Studio. How many are `published`? Does that match what `/events` shows?
-2. Open `/events/<slug>` of a **draft** event. Why do you get a 404?
-3. Search for `%` or `_` in the box. What happens, and why is it still not a security problem?
-4. Add a **"No events found"** message: in `EventGrid`, show text when `events.length === 0`.
-5. Add a **loading state**: wrap `<EventResults />` in `<Suspense fallback={...}>` in `app/events/page.tsx` and see what the user sees while the query runs (add a short `sleep` in the query to notice it).
-6. Add a **category filter** `?category=meetup`: extend `filterSchema`, then use it in `searchEvents` (hint: you'll need to filter through the `event_categories` table).
-7. Fix the **known issues** above until `npm run check` passes.
-8. Show the **event title in the breadcrumb** on the details page. (Hint: the layout receives `params` too, but it can't know the title without querying.)
+1. Apply the fixes above until `npm run check` and `npm run build` pass. After the pg import and the home page fixes, `/` should show the header and footer.
+2. Open [/events?page=2](http://localhost:3000/events?page=2), then type a search. What happens to the page number? Make a new search go back to page 1.
+3. Add a **"Free events only"** filter (`?free=1`): extend the Zod schema, add a condition in `browseConditions`, and add a checkbox to `FilterForm`. (Hint: an unchecked checkbox sends nothing at all.)
+4. Open the Network tab and click a category pill, then submit the filter form. Which one reloads the whole page, and which one doesn't? Why?
+5. Slow the query down (`await new Promise((r) => setTimeout(r, 2000))` in `searchEvents`) and watch the skeleton. Then remove the `key` from `<Suspense>` and change a filter. What changed?
+6. Add a **"Dashboard" link** to the breadcrumb of the details page, or a **"Back to results"** link that keeps the filters. (Hint: you'll need a way to carry the filters from the list to the details page.)
+7. Create `app/(dashboard)/dashboard/events/new/page.tsx` with a simple form (title, city, date) that doesn't submit yet. Why does the sidebar layout wrap it automatically?
+8. Add `app/(dashboard)/loading.tsx` with a skeleton. When does it show?
 
 ---
 
@@ -249,30 +236,30 @@ Note that `next build` also type-checks, so the first problem stops a production
 
 **Next.js**
 
-- [Dynamic routes](https://nextjs.org/docs/app/api-reference/file-conventions/dynamic-routes) and [`page.js` props (`params`, `searchParams`)](https://nextjs.org/docs/app/api-reference/file-conventions/page)
-- [`layout.js`](https://nextjs.org/docs/app/api-reference/file-conventions/layout) and [`not-found.js`](https://nextjs.org/docs/app/api-reference/file-conventions/not-found), [`notFound()`](https://nextjs.org/docs/app/api-reference/functions/not-found)
-- [`useSearchParams`](https://nextjs.org/docs/app/api-reference/functions/use-search-params), [`useRouter`](https://nextjs.org/docs/app/api-reference/functions/use-router), [`usePathname`](https://nextjs.org/docs/app/api-reference/functions/use-pathname)
-- [Learn Next.js: adding search and pagination](https://nextjs.org/learn/dashboard-app/adding-search-and-pagination) — the same pattern, step by step
-- [`<Image>`: `fill`, `preload`, `remotePatterns`](https://nextjs.org/docs/app/api-reference/components/image)
+- [Route groups](https://nextjs.org/docs/app/api-reference/file-conventions/route-groups) and [project organization (private folders, colocation)](https://nextjs.org/docs/app/getting-started/project-structure)
+- [`<Form>` (`next/form`)](https://nextjs.org/docs/app/api-reference/components/form)
+- [Streaming](https://nextjs.org/docs/app/guides/streaming) and [`loading.js`](https://nextjs.org/docs/app/api-reference/file-conventions/loading)
+- [Learn Next.js: search and pagination](https://nextjs.org/learn/dashboard-app/adding-search-and-pagination)
+- [`searchParams`](https://nextjs.org/docs/app/api-reference/file-conventions/page#searchparams-optional) on pages and [`useSearchParams`](https://nextjs.org/docs/app/api-reference/functions/use-search-params) in Client Components
 
 **Drizzle**
 
-- [Relational queries (`findMany`, `with`)](https://orm.drizzle.team/docs/rqb) and [filter operators](https://orm.drizzle.team/docs/operators)
-- [Insert and `returning`](https://orm.drizzle.team/docs/insert) and [transactions](https://orm.drizzle.team/docs/transactions)
+- [Filter operators (`and`, `eq`, `gte`, `ilike`, `inArray`)](https://orm.drizzle.team/docs/operators)
+- [Select: limit and offset, distinct, `$count`](https://orm.drizzle.team/docs/select)
+- [Relational queries](https://orm.drizzle.team/docs/rqb)
 
-**Libraries**
+**Zod**
 
-- [Zod](https://zod.dev/) — schema validation
-- [`use-debounce`](https://github.com/xnimorz/use-debounce)
-- [Faker](https://fakerjs.dev/guide/) — fake data
+- [Defining schemas: `z.enum`, `z.coerce`, `z.iso.date()`](https://zod.dev/api) and `.catch()`
 
 **Web basics**
 
-- [`URLSearchParams`](https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams) (MDN) and [what is a slug?](https://developer.mozilla.org/en-US/docs/Glossary/Slug)
-- [React: controlled and uncontrolled inputs](https://react.dev/learn/sharing-state-between-components#controlled-and-uncontrolled-components)
-- [SQL injection](https://owasp.org/www-community/attacks/SQL_Injection) (OWASP) — why we use parameters
+- [`<form>` and the GET vs POST methods](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Forms/Sending_and_retrieving_form_data) (MDN)
+- [`<label>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/label) and [`aria-busy`](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-busy) (MDN)
+- [Cumulative Layout Shift](https://web.dev/articles/cls): why skeletons should match the final layout
 
 **Previous classes**
 
-- [Class 03 README](../class_03_db/README.md) — PostgreSQL and Drizzle setup, troubleshooting
-- [Class 02 README](../class_02_essentials/README.md) — Server vs Client Components, `<Suspense>`, shadcn/ui
+- [Class 04 README](../class_04_routing/README.md): the seed script, queries layer, dynamic route and search
+- [Class 03 README](../class_03_db/README.md): PostgreSQL and Drizzle setup
+- [Class 02 README](../class_02_essentials/README.md): Server vs Client Components, Suspense, shadcn/ui

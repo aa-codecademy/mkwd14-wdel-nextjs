@@ -3,8 +3,8 @@
  *
  * A CLIENT component, because it needs the browser: typing events and the router.
  * It does not fetch anything itself. It only updates the URL. Next.js then re-renders the
- * server page (app/events/page.tsx) with the new search params, and the new results stream
- * back. No fetch(), no useEffect, no loading state to write by hand.
+ * server page (app/(marketing)/events/page.tsx) with the new search params, and the new results
+ * stream back. No fetch(), no useEffect, no loading state to write by hand.
  *
  * The hooks (all from 'next/navigation'):
  *   useRouter()       -> `router.replace(url)` changes the URL without a full page reload
@@ -27,7 +27,7 @@ export function SearchBox() {
   // (typing "next" = 4 queries). With a 500 ms debounce the function runs only after the user
   // pauses typing for half a second, so we send 1 query.
   const onChange = useDebouncedCallback((value: string) => {
-    // Start from a COPY of the current params, so any other params (filters we add later)
+    // Start from a COPY of the current params, so the other filters (category, city, sort, ...)
     // are kept. URLSearchParams is the built-in browser class for query strings.
     const next = new URLSearchParams(searchParams);
     if (value.trim()) {
@@ -37,6 +37,9 @@ export function SearchBox() {
     }
 
     // toString() also URL-encodes the text for us ("rock & roll" -> "rock+%26+roll").
+    // Heads-up: `page` is NOT reset here. Searching while on page 3 keeps ?page=3, which may not
+    // exist for the new results. EventResults handles that with an "only N pages" message, but
+    // a better fix is `next.delete('page')` (go back to page 1 on every new search).
     const query = next.toString();
 
     // `replace` (not `push`): typing doesn't add a history entry per search, so the Back

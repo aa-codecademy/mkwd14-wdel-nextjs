@@ -18,7 +18,7 @@ import { categories, eventCategories, events } from '../schema';
 import type { EventFilters } from '../../lib/event-filters';
 
 // What to load together with each event (the `with` option of Drizzle's relational queries).
-// It uses the relations defined in db/schema.ts. Shared by all three queries below.
+// It uses the relations defined in db/schema.ts. Shared by the event queries below.
 //   venue            -> the whole venue row
 //   eventCategories  -> the join table. `columns: {}` = "don't select any join-table columns,
 //                       I only want the `category` behind each row".
@@ -31,6 +31,7 @@ const withDetails = {
   organizer: { columns: { id: true, name: true, handle: true } },
 } as const;
 
+// How many events per page. Small on purpose, so pagination is easy to see with 30 seeded events.
 export const PAGE_SIZE = 6;
 
 // All published events, soonest first. (Today it's only used to derive the EventWithDetails type.)
@@ -47,30 +48,41 @@ export async function getPublishedEvents() {
   return rows.map(flattenCategories);
 }
 
+// The `?sort=` values mapped to ORDER BY clauses. A lookup object is neater than if/else, and
+// the second column is a TIE-BREAKER: events with the same price are then ordered by date.
+// (`sortOrder[filters.sort]` is always valid because the Zod schema only allows these keys.)
 const sortOrder = {
   date: [asc(events.startsAt)],
   price: [asc(events.minPriceCents), asc(events.startsAt)],
   newest: [asc(events.createdAt)],
 } as const;
 
-// Published events, optionally filtered by a title search (?q=).
+// ONE PAGE of published events that match the filters, plus the numbers needed for pagination.
+// Returns { events, total, pageCount }.
 export async function searchEvents(filters: EventFilters) {
+  // The same WHERE is used for the page of rows AND for the count, so they always agree.
   const where = browseConditions(filters);
 
+  // Promise.all runs both queries AT THE SAME TIME instead of one after the other, so the page
+  // waits for the slower of the two, not for the sum of both.
   const [rows, total] = await Promise.all([
     db.query.events.findMany({
       where,
       orderBy: [...sortOrder[filters.sort]],
+      // PAGINATION = LIMIT + OFFSET: take PAGE_SIZE rows, after skipping the rows of the earlier pages.
+      // Page 1 skips 0, page 2 skips 6, page 3 skips 12, ...
       limit: PAGE_SIZE,
       offset: (filters.page - 1) * PAGE_SIZE,
       with: withDetails,
     }),
+    // How many rows match in TOTAL (not just this page): `SELECT count(*) ... WHERE ...`.
     db.$count(events, where),
   ]);
 
   return {
     events: rows.map(flattenCategories),
     total,
+    // 13 events / 6 per page = 2.17 -> 3 pages. `Math.max(1, ...)`: even with 0 results we have 1 page.
     pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
   };
 }
@@ -87,8 +99,12 @@ export async function getEventBySlug(slug: string) {
   return row && flattenCategories(row);
 }
 
+// The values for the filter controls: which cities have events, and all categories.
+// Also read from the database, so a new city or category shows up without touching the UI code.
 export async function getFilterOptions() {
+  // Two independent queries -> run them in parallel again.
   const [cityRows, categoryRows] = await Promise.all([
+    // SELECT DISTINCT city ... = each city once, even if it has 10 events.
     db
       .selectDistinct({ city: events.city })
       .from(events)
@@ -114,6 +130,9 @@ function flattenCategories<Row, Category>(
   return { ...event, categories: eventCategories.map((ec) => ec.category) };
 }
 
+// Builds the WHERE clause from the filters. Start with the rule that always applies (published
+// only), then ADD one condition per filter the user actually set. `and(...conditions)` joins
+// them all with AND.
 function browseConditions(filters: EventFilters) {
   const conditions = [eq(events.status, 'published')];
 
@@ -126,10 +145,15 @@ function browseConditions(filters: EventFilters) {
   }
 
   if (filters.from) {
+    // gte = `>=`: events starting on or after that date. `new Date('2027-03-01')` is midnight UTC.
     conditions.push(gte(events.startsAt, new Date(filters.from)));
   }
 
   if (filters.category) {
+    // Events and categories are MANY-TO-MANY (join table `event_categories`). So we use a SUBQUERY:
+    //   WHERE events.id IN (SELECT event_id FROM event_categories
+    //                       JOIN categories ... WHERE categories.slug = 'meetup')
+    // Building it with `db.select(...)` (without awaiting it) gives Drizzle a query to embed.
     const inCategory = db
       .select({ id: eventCategories.eventId })
       .from(eventCategories)

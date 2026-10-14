@@ -4,15 +4,17 @@
  * It wraps BOTH /events (the list) and /events/[slug] (the details), so the breadcrumb is
  * written once. The tree for /events/some-slug is:
  *
- *   RootLayout (app/layout.tsx: header + footer)
- *     └─ EventsLayout (this file: breadcrumb)
- *          └─ the page (app/events/[slug]/page.tsx)
+ *   RootLayout (app/layout.tsx: <html> and <body>)
+ *     └─ MarketingLayout (app/(marketing)/layout.tsx: header + footer)
+ *          └─ EventsLayout (this file: breadcrumb)
+ *               └─ the page (app/(marketing)/events/[slug]/page.tsx)
  *
  * Layouts stay mounted while you move between the pages inside them, so this component is not
  * re-created when you open an event and come back. Only `children` changes.
  *
- * Folders do NOT have to be named after URLs only: a layout here affects only the routes below
- * `app/events/`. The home page (/) doesn't get the breadcrumb.
+ * A layout affects only the routes below its folder. Here that's everything under /events
+ * (the `(marketing)` part of the path is a route group and isn't in the URL). The home page
+ * and /about don't get the breadcrumb.
  */
 import Link from 'next/link';
 

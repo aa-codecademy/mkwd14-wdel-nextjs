@@ -1,14 +1,18 @@
 # Gatherly — end of class 04
 
-The course application as it stands after class 4: the pages now read **real data from PostgreSQL** (filled by a seed script), there's an **event details page** (`/events/[slug]`) and **search** on `/events` that keeps its state in the URL (`?q=...`).
+The course application as it stands after class 4: the pages now read **real data from PostgreSQL** (filled by a seed script), there's an **event details page** (`/events/[slug]`), and `/events` has **search, category and city/date/sort filters and pagination**, all kept in the URL. The app is split into **route groups**: `(marketing)` (public site) and `(dashboard)` (organizers).
 
-> 📘 **What's new and why?** The concepts, step-by-step run instructions, exercises and links are in the **[class 04 README](../README.md)**. PostgreSQL setup is in the **[class 03 README](../../class_03_db/README.md)**.
+> 📘 **What's new and why?** The concepts, step-by-step run instructions, exercises and links are in the **[class 04 README](../README.md)**. Route groups, filters and pagination are explained in the **[class 06 README](../../class_06_forms/README.md)**. PostgreSQL setup is in the **[class 03 README](../../class_03_db/README.md)**.
 
-| Route                                                 | File                              | Data source                         |
-| ----------------------------------------------------- | --------------------------------- | ----------------------------------- |
-| [/](http://localhost:3000)                            | `app/page.tsx`                    | none                                |
-| [/events](http://localhost:3000/events)               | `app/events/page.tsx`             | database (`searchEvents`), `?q=`    |
-| `/events/[slug]`                                      | `app/events/[slug]/page.tsx`      | database (`getEventBySlug`)         |
+| Route                                                 | File                                              | Data source                         |
+| ----------------------------------------------------- | ------------------------------------------------- | ----------------------------------- |
+| `/` ⚠️ see the note below                             | `app/page.tsx` (and an empty `app/(marketing)/page.tsx`) | none                         |
+| [/about](http://localhost:3000/about)                 | `app/(marketing)/about/page.tsx`                  | none                                |
+| [/events](http://localhost:3000/events)               | `app/(marketing)/events/page.tsx`                 | database (`searchEvents`), URL filters |
+| `/events/[slug]`                                      | `app/(marketing)/events/[slug]/page.tsx`          | database (`getEventBySlug`)         |
+| [/dashboard](http://localhost:3000/dashboard)         | `app/(dashboard)/dashboard/page.tsx`              | none yet (placeholder)              |
+
+> ⚠️ Two files currently claim the home page (`app/page.tsx` and an empty `app/(marketing)/page.tsx`). See the *Known issues* in the [class 04 README](../README.md).
 
 ## 🚀 Quick start
 
@@ -45,28 +49,33 @@ Open [http://localhost:3000/events](http://localhost:3000/events).
 ```
 gatherly/
 ├── app/
-│   ├── layout.tsx              ← root layout: <html>, <body>, fonts, metadata, Header + Footer
-│   ├── page.tsx                ← "/" (landing page)
+│   ├── layout.tsx              ← root layout: only <html>, <body>, fonts, metadata
+│   ├── page.tsx                ← the landing page (should move into (marketing), see the note above)
 │   ├── globals.css             ← Tailwind, brand tokens (@theme) and shadcn's theme variables
-│   └── events/
-│       ├── layout.tsx          ← NEW: breadcrumb layout for everything under /events
-│       ├── page.tsx            ← "/events": reads ?q=, shows search + results
-│       └── [slug]/
-│           ├── page.tsx        ← NEW: event details (dynamic route)
-│           └── not-found.tsx   ← NEW: 404 for an unknown event
+│   ├── (marketing)/            ← route group: the public site (not part of the URL)
+│   │   ├── layout.tsx          ← header + footer
+│   │   ├── about/page.tsx      ← "/about"
+│   │   └── events/
+│   │       ├── layout.tsx      ← breadcrumb for everything under /events
+│   │       ├── page.tsx        ← "/events": filters, search, pagination
+│   │       ├── _components/    ← private folder: search-box, category-links, filter-form, pagination, event-results
+│   │       └── [slug]/
+│   │           ├── page.tsx        ← event details (dynamic route)
+│   │           └── not-found.tsx   ← 404 for an unknown event
+│   └── (dashboard)/            ← route group: the organizer area
+│       ├── layout.tsx          ← sidebar
+│       └── dashboard/page.tsx  ← "/dashboard"
 ├── components/
-│   ├── search-box.tsx          ← NEW (Client): search input that writes ?q= into the URL
-│   ├── event-results.tsx       ← NEW (Server): fetches the events and renders the grid
 │   ├── event-cover.tsx         ← NEW: cover image with a placeholder when there is none
 │   ├── event-grid.tsx, event-card.tsx, favourite-button.tsx, header.tsx, footer.tsx
 │   └── ui/                     ← shadcn/ui: button, card, badge, input (NEW)
 ├── db/
 │   ├── schema.ts               ← the tables, relations and inferred types
 │   ├── index.ts                ← the `db` client (server-only)
-│   ├── queries/events.ts       ← NEW: getPublishedEvents, searchEvents, getEventBySlug
+│   ├── queries/events.ts       ← searchEvents (filters + pagination), getEventBySlug, getFilterOptions
 │   └── seed.ts                 ← NEW: the seed script (faker)
 ├── lib/
-│   ├── event-filters.ts        ← NEW: validates the search params with Zod
+│   ├── event-filters.ts        ← validates the URL params with Zod (+ `eventsHref` builds URLs)
 │   ├── format.ts               ← dates and prices as text
 │   └── utils.ts                ← `cn()` for class names
 ├── drizzle/                    ← generated SQL migrations (don't edit)
