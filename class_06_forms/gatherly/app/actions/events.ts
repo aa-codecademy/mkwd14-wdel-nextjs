@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import { db } from '../../db';
 import { eq } from 'drizzle-orm';
-import { events, venues } from '../../db/schema';
+import { eventCategories, events, venues } from '../../db/schema';
 import { getDemoOrganizer } from '../../db/demo-users';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
@@ -38,7 +38,6 @@ export async function createEvent(
   formData: FormData,
 ): Promise<CreateEventState> {
   const organizer = await getDemoOrganizer();
-  console.log(formData, 'Form data in server action createEvent');
   // Object.fromEntries keeps only the LAST value of a repeated field, so the
   // category checkboxes are read with getAll().
   const raw = {
@@ -46,16 +45,12 @@ export async function createEvent(
     categoryIds: formData.getAll('categoryIds'),
   };
 
-  console.log('server action raw:', raw);
-
   const values = Object.fromEntries(
     Object.entries(raw).map(([key, value]) => [
       key,
       Array.isArray(value) ? value.map(String) : String(value),
     ]),
   );
-
-  console.log('server action values:', values);
 
   const parsed = CreateEvent.safeParse(raw);
 
@@ -71,19 +66,25 @@ export async function createEvent(
 
   const priceCents = Math.round(price * 100);
 
-  const insertedEvent = await db
-    .insert(events)
-    .values({
-      ...input,
-      slug: await uniqueSlug(input.title),
-      organizerId: organizer.id,
-      city: venue.city,
-      minPriceCents: priceCents,
-      status: 'draft',
-    })
-    .returning({ id: events.id });
+  await db.transaction(async (tx) => {
+    const [insertedEvent] = await tx
+      .insert(events)
+      .values({
+        ...input,
+        slug: await uniqueSlug(input.title),
+        organizerId: organizer.id,
+        city: venue.city,
+        minPriceCents: priceCents,
+        status: 'draft',
+      })
+      .returning({ id: events.id });
 
-  if (!insertedEvent) throw new Error('Issue while creating event');
+    if (!insertedEvent) throw new Error('Issue while creating event');
+
+    await tx
+      .insert(eventCategories)
+      .values(categoryIds.map((categoryId) => ({ eventId: insertedEvent.id, categoryId })));
+  });
 
   revalidatePath('/dashboard');
   redirect('/dashboard');

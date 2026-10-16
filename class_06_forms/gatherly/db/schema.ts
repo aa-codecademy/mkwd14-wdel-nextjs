@@ -33,6 +33,7 @@ import {
 // rejects anything else. Heads-up: the spelling here is 'cancelled' (two l's), while the
 // older types/event-status.ts used 'canceled'. The database spelling is the one that counts.
 export const eventStatus = pgEnum('event_status', ['draft', 'published', 'cancelled']);
+export const orderStatus = pgEnum('order_status', ['pending', 'paid', 'refunded', 'canceled']);
 
 // pgTable('table_name', { columns }) declares one table.
 // A column is a builder chain: type -> constraints -> default.
@@ -118,6 +119,41 @@ export const eventCategories = pgTable(
   (table) => [primaryKey({ columns: [table.eventId, table.categoryId] })],
 );
 
+export const ticketTypes = pgTable('ticket_types', {
+  id: uuid().primaryKey().defaultRandom(),
+  eventId: uuid()
+    .notNull()
+    .references(() => events.id, { onDelete: 'cascade' }),
+  name: varchar().notNull(),
+  priceCents: integer().notNull(),
+  quantity: integer().notNull(),
+});
+
+export const orders = pgTable('orders', {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: uuid()
+    .notNull()
+    .references(() => users.id),
+  eventId: uuid()
+    .notNull()
+    .references(() => events.id),
+  status: orderStatus().notNull().default('pending'),
+  totalCent: integer().notNull(),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
+export const tickets = pgTable('tickets', {
+  id: uuid().primaryKey().defaultRandom(),
+  orderId: uuid()
+    .notNull()
+    .references(() => orders.id, { onDelete: 'cascade' }),
+  ticketTypeId: uuid()
+    .notNull()
+    .references(() => ticketTypes.id),
+  code: text().notNull().unique(),
+  attendeeName: text().notNull(),
+});
+
 // RELATIONS — tell Drizzle how tables connect, so we can load related rows in ONE query:
 //   db.query.events.findMany({ with: { venue: true, organizer: true } })
 // This is only for Drizzle's query API. It does NOT change the database. The real constraints
@@ -135,6 +171,7 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   venue: one(venues, { fields: [events.venueId], references: [venues.id] }),
   organizer: one(users, { fields: [events.organizerId], references: [users.id] }),
   eventCategories: many(eventCategories),
+  ticketTypes: many(ticketTypes),
 }));
 
 export const categoriesRelations = relations(categories, ({ many }) => ({
@@ -150,6 +187,22 @@ export const eventCategoriesRelations = relations(eventCategories, ({ one }) => 
   category: one(categories, { fields: [eventCategories.categoryId], references: [categories.id] }),
 }));
 
+export const ticketTypesRelations = relations(ticketTypes, ({ one, many }) => ({
+  event: one(events, { fields: [ticketTypes.eventId], references: [events.id] }),
+  tickets: many(tickets),
+}));
+
+export const ordersRelations = relations(orders, ({ one, many }) => ({
+  user: one(users, { fields: [orders.userId], references: [users.id] }),
+  event: one(events, { fields: [orders.eventId], references: [events.id] }),
+  tickets: many(tickets),
+}));
+
+export const ticketsRelations = relations(tickets, ({ one }) => ({
+  order: one(orders, { fields: [tickets.orderId], references: [orders.id] }),
+  ticketType: one(ticketTypes, { fields: [tickets.ticketTypeId], references: [ticketTypes.id] }),
+}));
+
 // TYPES inferred from the tables above. `$inferSelect` = the shape of a row we READ.
 // (`$inferInsert` would be the shape we pass when INSERTing; columns with defaults become optional.)
 // Change a column above and every place that uses these types updates automatically.
@@ -161,3 +214,10 @@ export type Venue = typeof venues.$inferSelect;
 // Heads-up: types/gatherly-event.ts and mocks/mock-events.ts still import the old name
 // `Event`, which is why `npm run typecheck` reports errors. They're unused leftovers now.
 export type GatherlyEvent = typeof events.$inferSelect;
+
+export type TicketType = typeof ticketTypes.$inferSelect;
+export type Order = typeof orders.$inferSelect;
+export type Ticket = typeof tickets.$inferSelect;
+
+export type EventStatus = (typeof eventStatus.enumValues)[number];
+export type OrderStatus = (typeof orderStatus.enumValues)[number];
