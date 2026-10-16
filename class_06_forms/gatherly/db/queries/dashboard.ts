@@ -9,9 +9,9 @@
  * organizer is commented out until authentication exists. Never ship a version like this:
  * a real dashboard must only return the signed-in organizer's own events.
  */
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, asc } from 'drizzle-orm';
 import { db } from '..';
-import { events } from '../schema';
+import { categories, events, venues } from '../schema';
 
 // `organizerId` is accepted already (the app will pass the signed-in user's id), but it isn't
 // used yet, which is why ESLint reports it as an unused argument.
@@ -23,4 +23,29 @@ export async function getOrganizerEvents(organizerId: string) {
     // Select ONLY the columns the list shows, not the whole row (no description, no price, ...).
     columns: { id: true, slug: true, title: true, startsAt: true, status: true, city: true },
   });
+}
+
+export async function getEventFormOptions() {
+  const [venueRows, categoryRows] = await Promise.all([
+    db
+      .select({
+        id: venues.id,
+        name: venues.name,
+        city: venues.city,
+      })
+      .from(venues)
+      .orderBy(asc(venues.name)),
+    db
+      .select({
+        id: categories.id,
+        name: categories.name,
+      })
+      .from(categories)
+      .orderBy(asc(categories.name)),
+  ]);
+
+  return {
+    venues: venueRows,
+    categories: categoryRows,
+  };
 }

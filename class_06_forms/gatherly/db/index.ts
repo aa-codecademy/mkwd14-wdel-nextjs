@@ -11,9 +11,9 @@
 // the database code (and DATABASE_URL, a secret) out of the browser bundle. Next.js supports
 // this import out of the box.
 import 'server-only';
-import { Pool } from '@/node_modules/@types/pg';
 import * as schema from './schema';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 
 // Next.js loads `.env` into process.env for us when the app runs (`next dev` / `next build`).
 // The value looks like: postgres://USER:PASSWORD@HOST:PORT/DATABASE (see .env.example).
