@@ -32,7 +32,9 @@ import { z } from 'zod';
 import { db } from '../../db';
 import { eq } from 'drizzle-orm';
 import { eventCategories, events, venues } from '../../db/schema';
-// There's no sign-in yet, so "who is calling" is a seeded demo user (see db/demo-users.ts).
+// ⚠️ Still the "pretend login" from class 6 (see db/demo-users.ts). Real sign-in exists now (class 7), but
+// this action hasn't been switched over yet, and demo-users.ts no longer compiles (the `users` table
+// is gone). Replace it with `requireOrganizer()` from lib/session.ts. See the class 07 README.
 import { getDemoOrganizer } from '../../db/demo-users';
 // redirect(): send the browser to another page. See the end of createEvent.
 import { redirect } from 'next/navigation';
@@ -99,8 +101,11 @@ export async function createEvent(
   _prev: CreateEventState,
   formData: FormData,
 ): Promise<CreateEventState> {
-  // 1. AUTHENTICATE: who is asking? For now a fixed demo organizer. Once sign-in exists this reads
-  //    the real session, and the action stops with an error if nobody is signed in.
+  // 1. AUTHENTICATE + AUTHORIZE: who is asking, and may they do this? Today: a fixed demo organizer.
+  //    The real version is one line:  `const organizer = await requireOrganizer('/dashboard/events/new');`
+  //    It reads the session from the cookie, and sends anyone who isn't a signed-in organizer away.
+  //    Until then, NOBODY is checked: this endpoint, as a public POST, accepts anyone. (The proxy and
+  //    the page only protect the PAGE, not this action. A page-level check never covers the actions.)
   const organizer = await getDemoOrganizer();
 
   // 2. READ the form data into a plain object.

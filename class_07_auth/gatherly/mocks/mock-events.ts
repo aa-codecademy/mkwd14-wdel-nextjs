@@ -3,8 +3,8 @@
  *
  * ⚠️ LEGACY since class 04: the pages read events from the DATABASE now (filled by
  * `npm run db:seed`), so nothing imports this file anymore. It's also broken: it imports the
- * `Event` type, which db/schema.ts renamed to `GatherlyEvent`, so `npm run typecheck` reports
- * an error here. Delete this folder, or fix the import, to get a clean typecheck.
+ * `Event` type (renamed to `GatherlyEvent`) and the `User` type (replaced by Better Auth's `user`
+ * table), so `npm run typecheck` reports errors here. Delete this folder, or fix the import, to get a clean typecheck.
  *
  * (In class 02-03 this file fed the pages while the database didn't exist yet.)
  *

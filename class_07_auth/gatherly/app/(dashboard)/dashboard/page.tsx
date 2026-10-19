@@ -1,24 +1,30 @@
 /**
  * ROUTE: /dashboard   — the organizer's list of their events.
  *
- * A Server Component that reads the database directly (`await getOrganizerEvents(...)`),
- * wrapped by the sidebar layout of the (dashboard) route group.
+ * A Server Component, wrapped by the sidebar layout of the (dashboard) route group. Since class 7
+ * it is PROTECTED:
  *
- * What is real and what is a placeholder in this version:
- *   ✅ the list of events, newest first, with a status badge (draft / published / cancelled)
- *   ✅ "New event" opens /dashboard/events/new, a real form handled by a Server Action
- *      (see app/actions/events.ts). After it succeeds you land back here and the new draft is
- *      at the top. That's what `revalidatePath('/dashboard')` + `redirect('/dashboard')` do.
- *   🚧 "Signed in as JohnDoe" is hard-coded text. There is no sign-in yet.
- *   🚧 getOrganizerEvents('') receives an empty id and returns ALL events (see the query file).
- *   🚧 <form action=""> around the Publish/Unpublish button: a form whose action does nothing
- *      yet. It marks where a SECOND Server Action (one that changes an event's status) plugs in.
- *      Clicking it just reloads the page.
+ *   const organizer = await requireOrganizer('/dashboard');
  *
- * Rendering note: this page uses nothing from the request (no cookies, headers or search
- * params), so `next build` could prerender it ONCE with the data of that moment. `npm run dev`
- * always renders fresh. A real dashboard reads the signed-in user (cookies), which makes it
- * dynamic automatically. This is also why the create action calls `revalidatePath`.
+ * That first line is the guard (lib/session.ts). It reads the session cookie, asks the database who
+ * you are, and then:
+ *   not signed in           -> redirect to /sign-in?next=/dashboard   (you come back after logging in)
+ *   signed in, attendee     -> redirect to /organizers-only
+ *   signed in, organizer    -> carries on, and returns the user, so we can use `organizer.id`
+ * proxy.ts also bounces visitors without a cookie before the page runs, but that is only a quick
+ * first filter. This line is the real lock.
+ *
+ * What is real and what is still a placeholder:
+ *   ✅ the page is only for organizers and admins
+ *   ✅ "New event" opens a real form (app/actions/events.ts)
+ *   🚧 "Signed in as JohnDoe" is still hard-coded: it should print `organizer.name`
+ *   🚧 getOrganizerEvents(organizer.id) gets the id, but the QUERY ignores it, so you see
+ *      everyone's events (see db/queries/dashboard.ts: a data leak to fix)
+ *   🚧 <form action=""> around Publish/Unpublish does nothing yet. A Server Action goes there,
+ *      and it must check that the event BELONGS to the signed-in organizer.
+ *
+ * Because it reads the cookie (through requireOrganizer), the page is rendered on every request:
+ * Next.js can't prerender something that depends on who is asking.
  */
 import Link from 'next/link';
 // `buttonVariants` gives a <Link> the LOOK of a button (see components/ui/button.tsx):
@@ -30,6 +36,7 @@ import { getOrganizerEvents } from '../../../db/queries/dashboard';
 import { requireOrganizer } from '../../../lib/session';
 
 export default async function DashboardPage() {
+  // The guard. Everything below runs only for a signed-in organizer or admin.
   const organizer = await requireOrganizer('/dashboard');
   const events = await getOrganizerEvents(organizer.id);
 

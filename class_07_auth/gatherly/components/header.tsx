@@ -1,8 +1,9 @@
 /**
  * Site header — rendered once in app/layout.tsx, so it shows on every page.
  *
- * A Server Component: it only shows links and has no state or click handlers,
- * so it doesn't need 'use client' and adds no JavaScript to the browser.
+ * A Server Component that only shows links. The one interactive piece, <AccountMenu />, is a Client
+ * Component INSIDE it: a server component can render client components, and only that small part
+ * ships JavaScript to the browser.
  *
  * Named export (`export function Header`) instead of a default export.
  * Only Next.js special files (page, layout, error, ...) need `export default`.
@@ -20,7 +21,7 @@ export function Header() {
           Gatherly
         </Link>
         {/* <nav> tells screen readers "this is the main navigation". */}
-        {/* Three links: the public pages, plus the organizer area (a different route group). */}
+        {/* Events and About for everyone. <AccountMenu> adds Sign in, or the user's name, Dashboard (organizers) and Sign out. */}
         <nav className="flex gap-6 text-sm font-medium">
           <Link href="/events" className="hover:text-brand-500">
             Events

@@ -28,6 +28,8 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
+// The auth tables live in their own file (db/auth-schema.ts). Our app tables point at `user` below.
+// The old `users` table of classes 3-6 is GONE: Better Auth's `user` table replaced it (migration 0004).
 import { user } from './auth-schema';
 
 // A PostgreSQL ENUM: a column that can only hold one of these values. The database itself
@@ -82,6 +84,9 @@ export const events = pgTable('events', {
   venueId: uuid()
     .notNull()
     .references(() => venues.id),
+  // Now `text` and pointing at the auth `user` table (it was a uuid pointing at `users`): Better Auth's
+  // ids are strings. Same idea as before: the event's owner. This is what AUTHORIZATION checks compare
+  // against ("is this event mine?").
   organizerId: text()
     .notNull()
     .references(() => user.id),
@@ -131,6 +136,7 @@ export const ticketTypes = pgTable('ticket_types', {
 // a user or an event that has orders. That protects the sales history.
 export const orders = pgTable('orders', {
   id: uuid().primaryKey().defaultRandom(),
+  // Who bought the order: also an auth `user` id now (text).
   userId: text()
     .notNull()
     .references(() => user.id),

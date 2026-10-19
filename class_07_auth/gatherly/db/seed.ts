@@ -68,7 +68,10 @@ const userData = {
     handle: 'soundwave',
     role: 'organizer',
   },
-  // Stands in for "the signed-in attendee" until real sign-in exists (see db/demo-users.ts).
+  // Stands in for "the signed-in attendee" (see db/demo-users.ts).
+  // NOTE: the seed creates `user` rows only. It creates no `account` rows (no password, no GitHub link),
+  // so none of these seeded users can actually SIGN IN. They're data for events and orders. To log in
+  // you sign in with GitHub, which creates YOUR user, and then you give yourself a role (see the README).
   demoAttendee: {
     name: 'Demo Attendee',
     email: 'attendee@example.com',

@@ -3,8 +3,11 @@ import { eq } from 'drizzle-orm';
 import { users } from './schema';
 import { db } from '.';
 
-// TODO(sign-in): there is no sign-in yet, so "the current user" is a seeded row.
-// When authentication is added, this file is deleted and every action reads the real session instead.
+// ⚠️ OBSOLETE since class 7. Sign-in exists now, so "the current user" should come from the real session
+// (lib/session.ts), and this file should be DELETED once the actions use it. It also doesn't compile
+// anymore: it imports `users` from './schema', and that table was replaced by Better Auth's `user`.
+//
+// (The text below is kept to explain why the file existed.)
 //
 // WHY THIS FILE EXISTS: a Server Action must know WHO is acting (the organizer of the new event).
 // It must come from the server (the session), never from the form. Until sign-in exists, this

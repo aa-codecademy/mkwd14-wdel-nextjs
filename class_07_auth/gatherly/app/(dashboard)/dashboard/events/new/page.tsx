@@ -11,6 +11,11 @@
  *   action (server)-> receives the submit, validates, writes (app/actions/events.ts)
  *
  * It lives in the (dashboard) route group, so the sidebar layout wraps it automatically.
+ *
+ * ⚠️ AUTHORIZATION GAP: proxy.ts keeps visitors WITHOUT a cookie out of /dashboard/*, but this page doesn't
+ * call requireOrganizer() the way /dashboard does. A signed-in ATTENDEE (any cookie passes the proxy)
+ * can open it. Add the guard at the top, and add it to the Server Action too: a page check never
+ * protects the action behind it.
  */
 // The options for the <select> and the checkboxes come from the database, so a new venue or
 // category appears in the form without changing any code.

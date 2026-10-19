@@ -4,10 +4,14 @@
  * Unlike the public queries (db/queries/events.ts), this one is NOT limited to published events:
  * an organizer must see their drafts too. That's why the dashboard has its own query file.
  *
- * ⚠️ Work in progress: nobody is signed in yet, so we can't know WHICH organizer is asking.
- * Today it returns the events of EVERYONE, and the `where` that would limit it to one
- * organizer is commented out until authentication exists. Never ship a version like this:
- * a real dashboard must only return the signed-in organizer's own events.
+ * ⚠️ AUTHORIZATION GAP: the dashboard page now passes the signed-in organizer's id, but
+ * `getOrganizerEvents` still IGNORES it: the `where` that would limit the list to that
+ * organizer is commented out. So every organizer sees EVERY organizer's events, drafts included.
+ * That's a data leak ("broken access control", the #1 web security risk). The fix is to
+ * restore the `where` (it's one line) and test it with two organizers.
+ *
+ * The rule to remember: authentication gets you IN, but every query that returns or changes
+ * user-owned data must also filter by the owner.
  */
 // Heads-up: `eq` isn't used yet (it belongs to the commented-out `where` below), and ESLint reports it.
 import { desc, eq, asc } from 'drizzle-orm';

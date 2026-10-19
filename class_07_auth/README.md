@@ -1,13 +1,13 @@
-# Class 06 — Forms & Server Actions (and the Organizer Dashboard)
+# Class 07 — Authentication & Authorization with Better Auth
 
-Until now Gatherly could only **read** data. In this class it learns to **change** data: an organizer fills in a **form**, and a **Server Action** validates it and saves a new event in the database.
+Until now, Gatherly didn't know **who** was using it. In class 6 a fixed "demo organizer" created every event. In this class the app learns to **recognise people**: they sign in (with **GitHub**, and with email and password on the server side), the server remembers them with a **session**, and the app decides **what each person may do** with **roles**.
 
-This folder is also where the app grows its **organizer dashboard** next to the public site (route groups), and where the events list gets filters, pagination and streaming. Everything is explained here, step by step. The forms part comes first, because it's the heart of the class.
+We use **[Better Auth](https://www.better-auth.com/)**, a library that handles sign-up, sign-in, sessions and OAuth, so we don't write security-critical code ourselves.
 
-> 🧭 **Where we are:** *creating* an event works end to end (form → validation → database → redirect). The dashboard's **Publish / Unpublish** button is still a placeholder, nobody is signed in yet (a seeded "demo organizer" acts instead), and the ticketing tables exist but nothing uses them yet.
+> 🧭 **Where we are:** Better Auth is installed and connected to our database, "Continue with GitHub" works, the header shows the signed-in user, `/dashboard` is guarded by role, and the old `users` table has been replaced. Some of it is **unfinished**: the create-event form still acts as the demo organizer, the email/password form has no screen yet, and a few pages and queries still skip the checks. Each gap is listed in [Known issues](#known-issues-in-this-snapshot) and is a good exercise.
 
 **On this page:**
-[Run it](#-run-it) · [Part 1: Forms and Server Actions](#part-1--forms-and-server-actions-step-by-step) · [Part 2: The new tables](#part-2--the-new-database-tables) · [Part 3: Route groups](#part-3--route-groups-and-the-two-shells) · [Part 4: Filters and pagination](#part-4--filters-and-pagination-in-the-url) · [Part 5: Streaming](#part-5--streaming-with-suspense-and-a-skeleton) · [Part 6: The dashboard](#part-6--the-dashboard) · [Known issues](#known-issues-in-this-snapshot) · [Exercises](#-try-it-yourself) · [Links](#-useful-links)
+[Run it](#-run-it) · [Part 1: The ideas](#part-1--the-ideas-before-any-code) · [Part 2: GitHub credentials](#part-2--getting-the-github-credentials-step-by-step) · [Part 3: Implementing Better Auth](#part-3--implementing-better-auth-step-by-step) · [Part 4: Authorization in practice](#part-4--authorization-in-practice) · [Part 5: What changed in the data](#part-5--what-changed-in-the-data) · [Known issues](#known-issues-in-this-snapshot) · [Exercises](#-try-it-yourself) · [Links](#-useful-links)
 
 ## 📁 What's in this folder
 
@@ -22,561 +22,570 @@ This folder is also where the app grows its **organizer dashboard** next to the 
 You need the PostgreSQL server from class 3 running ([class 03 README](../class_03_db/README.md), Steps 1–2).
 
 ```bash
-cd class_06_forms/gatherly
-npm install
+cd class_07_auth/gatherly
+npm install                  # new packages: better-auth and @better-auth/drizzle-adapter
 cp .env.example .env         # skip if you already have .env (Windows PowerShell: Copy-Item .env.example .env)
-npm run db:migrate           # NEW: this class adds 3 tables (orders, tickets, ticket_types)
-npm run db:seed              # fills the tables with fake data. It ADDS rows each time, see the class 04 README for how to reset
+```
+
+Then open `.env` and fill in **three new values** (`DATABASE_URL` stays as before):
+
+| Variable               | What to put there                                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`   | A long random string. Generate it: `npx auth@latest secret` (or `openssl rand -base64 32`)          |
+| `GITHUB_CLIENT_ID`     | From your GitHub OAuth app. See [Part 2](#part-2--getting-the-github-credentials-step-by-step)      |
+| `GITHUB_CLIENT_SECRET` | The same place. Shown **only once**                                                                 |
+
+The GitHub values are optional: without them the app runs, but the "Continue with GitHub" button doesn't appear.
+
+```bash
+npm run db:migrate           # NEW: migration 0004 creates the 4 auth tables and REPLACES the old `users` table
+npm run db:seed              # resets the database and fills it with demo data
 npm run dev
 ```
 
-> ⚠️ **Two things stand between you and a working form.** Read [Known issues](#known-issues-in-this-snapshot) first. Short version:
->
-> 1. `npm run db:seed` currently fails because of a wrong import. The one-line fix is in the table below.
-> 2. The create-event form acts as a **demo organizer** with the handle `avenga`. The seed doesn't create that user yet, so add it by hand (two rows), like this:
->
-> ```sql
-> INSERT INTO users (name, email, handle, role) VALUES
->   ('Avenga Academy', 'academy@avenga.example', 'avenga', 'organizer'),
->   ('Demo Attendee',  'attendee@example.com',   'demo-attendee', 'attendee');
-> ```
->
-> Run it in `psql "<your DATABASE_URL>"`, or with Docker:
-> `docker exec -it gatherly-db psql -U postgres -d gatherly -c "INSERT INTO users (name, email, handle, role) VALUES ('Avenga Academy','academy@avenga.example','avenga','organizer'), ('Demo Attendee','attendee@example.com','demo-attendee','attendee');"`
+> ⚠️ **Migration 0004 deletes the old `users` table** (`DROP TABLE "users" CASCADE`) and everything that depended on it, then points `events` and `orders` at the new `user` table. On a database with data from earlier classes, run `npm run db:seed` afterwards: it wipes and refills everything.
 
-Then try these URLs:
+### Make yourself an organizer
 
-| URL                                                                                | What you should see                                                       |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| [/dashboard](http://localhost:3000/dashboard)                                      | The organizer's events, in a layout with a sidebar                        |
-| [/dashboard/events/new](http://localhost:3000/dashboard/events/new)                | **The new-event form**                                                    |
-| [/events](http://localhost:3000/events)                                            | Events with search, category pills, filters and pagination                |
-| [/events?page=999](http://localhost:3000/events?page=999)                          | "There are only N pages of results", with a link to the last page         |
-| [/about](http://localhost:3000/about)                                              | A static page inside the public layout                                    |
+When you sign in with GitHub, Better Auth creates **your** user with the role **`attendee`**. The dashboard is for organizers, so at first you'll land on the "The dashboard is for organizers" page. That's the authorization working! To become an organizer, change your role in the database. Sign in once, then run (with **your** GitHub email):
+
+```sql
+UPDATE "user" SET role = 'organizer' WHERE email = 'you@example.com';
+```
+
+`"user"` needs the double quotes: `user` is a reserved word in PostgreSQL. Run it in `psql "<your DATABASE_URL>"`, or with Docker:
+
+```bash
+docker exec -it gatherly-db psql -U postgres -d gatherly -c "UPDATE \"user\" SET role = 'organizer' WHERE email = 'you@example.com';"
+```
+
+Reload `/dashboard`. The role is read from the database on each request, so no need to sign in again.
+
+> The seeded users (`avenga`, `js-mk`, `soundwave`, `demo-attendee`) are **data**: they own the demo events and orders, but they have no password or GitHub link, so nobody can sign in as them.
+
+Try these:
+
+| URL                                                              | What you should see                                                              |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [/events](http://localhost:3000/events)                          | The header shows **Sign in**                                                     |
+| [/dashboard](http://localhost:3000/dashboard) (signed out)       | You're sent to `/sign-in?next=/dashboard`                                        |
+| [/sign-in](http://localhost:3000/sign-in)                        | The page with **Continue with GitHub**                                           |
+| After signing in as an attendee                                  | Back on the site, the header shows your name and **Sign out**; `/dashboard` → "The dashboard is for organizers" |
+| After you promote yourself                                       | The header gets a **Dashboard** link, and `/dashboard` opens                     |
 
 ---
 
-# Part 1 — Forms and Server Actions, step by step
+# Part 1 — The ideas, before any code
 
-## 1.1 The problem
+## 1.1 Authentication vs authorization
 
-A page that only reads data is easy: the server runs a query and sends HTML. But to **create** an event, three things have to happen:
+These two words sound alike and mean different things. You'll use both every day:
 
-1. the browser shows a **form** and sends what the user typed,
-2. the **server** receives it, checks it, and writes it to the database,
-3. the browser shows **the result**: either "saved" or "this field is wrong".
+| | **Authentication** ("authn") | **Authorization** ("authz") |
+| --- | --- | --- |
+| The question | **Who are you?** | **What are you allowed to do?** |
+| Happens | When you sign in | On **every** request that needs a permission |
+| Examples | A password, "Continue with GitHub", a passkey | "Only organizers open the dashboard", "only the owner edits this event" |
+| In Gatherly | Better Auth: sessions, GitHub login | Roles (`lib/roles.ts`) and the guards (`lib/session.ts`) |
+| When it fails | **401** Unauthorized: "I don't know who you are" → sign-in page | **403** Forbidden: "I know who you are, but no" → a "not allowed" page |
 
-Before **Server Actions**, you built every piece by hand: an API route (`app/api/events/route.ts`), a `fetch('/api/events', { method: 'POST', body: ... })` call in the browser, JSON encoding and decoding, loading state, and error state, all wired together manually.
+The failure case matters: a visitor who isn't signed in should be **sent to sign in**. An attendee who *is* signed in should be **told they aren't allowed**. Sending them to the sign-in page would be confusing, because they already signed in. That's why we have `/sign-in` **and** `/organizers-only`.
 
-A **Server Action** removes the wiring. It's an `async` function that runs **on the server**, and you hand it directly to a form:
+## 1.2 How a website remembers you: sessions and cookies
 
-```tsx
-<form action={createEvent}> ... </form>
-```
-
-Next.js turns this into a POST request, runs the function on the server and sends back the result. You write the form and the function. Next.js writes the networking.
-
-```
- browser                                          server
- ───────                                          ──────
- <form action={formAction}>         POST          createEvent(prevState, formData)
-   fields...                    ───────────►        1. read the form data
-   [Create Event]                                   2. validate it (Zod)
-                                                    3. check it against the database
- shows errors, or navigates      ◄───────────       4. save it (transaction)
- to /dashboard                    result            5. revalidate + redirect, or return errors
-```
-
-## 1.2 The files, and who runs where
-
-| File                                                                     | Runs on        | Job                                                                |
-| ------------------------------------------------------------------------ | -------------- | ------------------------------------------------------------------ |
-| `app/(dashboard)/dashboard/events/new/page.tsx`                          | **server**     | Loads the venues and categories, renders the form                  |
-| `.../new/_components/new-event-form.tsx`                                 | **browser** (and server for the first HTML) | The `<form>`, wired to the action with `useActionState` |
-| `.../new/_components/field.tsx`, `field-errors.tsx`                      | browser        | A label + control + error messages, reused for every field         |
-| `components/submit-button.tsx`                                           | browser        | A button that disables itself while saving (`useFormStatus`)       |
-| `app/actions/events.ts`                                                  | **server only** | **The Server Action** `createEvent`: validate, save, redirect      |
-| `db/demo-users.ts`                                                       | server only    | "Who is acting?" until sign-in exists                              |
-| `db/queries/dashboard.ts`                                                | server only    | `getEventFormOptions()` for the form's dropdown and checkboxes     |
-
-A useful way to remember it:
+HTTP has no memory. Every request is a stranger. After you sign in, the server must recognise you on the next click, **without** asking for your password again. The usual solution is a **session**:
 
 ```
-page (server)   ──props──►  form (client)  ──submit──►  action (server)
-reads the options           shows state                 validates and writes
+1. You sign in.                   ──►  server checks the proof (password, or GitHub)
+2. The server creates a SESSION   ──►  a row in the `session` table:  { token: "k3j9…", userId, expiresAt }
+3. It sends the token as a COOKIE ◄──  Set-Cookie: better-auth.session_token=k3j9…; HttpOnly
+4. Every later request            ──►  the browser attaches the cookie automatically
+5. The server looks the token up  ──►  finds the session row, then the user: "this is Ana"
+6. Sign out                       ──►  the row is deleted and the cookie cleared: the token is dead
 ```
 
-## 1.3 Step by step: follow one submit from click to database
+Key facts to remember:
 
-Open [the form](http://localhost:3000/dashboard/events/new), the file `new-event-form.tsx`, and `app/actions/events.ts` side by side. We'll follow what happens.
+- The **cookie holds only a random token**, not your name or role. All the real information is in the database. A stolen token **is** that user, so it's protected: `HttpOnly` means JavaScript on the page **cannot read it**, so a script injected into the page can't steal it.
+- Because sessions are **rows in our database**, we can **revoke** them (delete the row to sign someone out everywhere), and they **expire** (by default after about a week).
+- The browser sends the cookie automatically, so Server Components, Server Actions and the proxy can all read it from the request headers.
+- On the server we ask Better Auth "who is this request from?" with `auth.api.getSession({ headers })`. On the client we use the `useSession()` hook.
 
-### Step 1. The page loads the options (server)
+## 1.3 Passwords
 
-`page.tsx` is a Server Component. It calls `getEventFormOptions()` and passes `{ venues, categories }` to the form as **props**. The dropdown and the checkboxes are therefore built from **the database**: add a venue, and it shows up without touching the form's code.
+If someone signs up with an email and a password, rule number one is: **never store the password**. The database stores a **hash**, a one-way scramble: from the hash you can't get the password back, but you can check a typed password by hashing it the same way and comparing. Better Auth does this for us (with a deliberately slow hash, so guessing is expensive). The hash lives in `account.password`. You never write this code yourself, which is the whole point of using a library for authentication.
 
-Props going from a Server Component to a Client Component must be **plain data** (objects, arrays, strings, numbers). They travel over the network, so functions and class instances can't be passed.
+## 1.4 OAuth: "Continue with GitHub"
 
-### Step 2. The form connects to the action (client)
+OAuth lets users sign in **with an account they already have**, so we never handle their password. GitHub vouches for them. The dance has six steps (the same one behind every "Continue with Google / GitHub / ..." button):
 
-```tsx
-'use client';
-
-const [state, formAction, pending] = useActionState(createEvent, initialState);
-
-return <form action={formAction}> ... </form>;
+```
+ You          Gatherly (our server)                         GitHub
+  │  click "Continue with GitHub"
+  │ ───────────────►│ 1. the auth client asks our server to start
+  │ ◄───────────────│ 2. our server answers with GitHub's authorization URL
+  │ ───────────────────────────────────────────────────────►│ 3. the browser goes to github.com
+  │                                                          │    you log in (if needed) and click "Authorize"
+  │ ◄────────────────────────────────────────────────────────│ 4. GitHub sends the browser BACK to our callback URL
+  │ ───────────────►│    /api/auth/callback/github?code=one-time-code
+  │                 │ 5. our server swaps the code for your profile, using the client SECRET
+  │                 │    creates or finds your `user` + `account`, creates a `session`, sets the cookie
+  │ ◄───────────────│ 6. you land on the page you wanted (`callbackURL`)
 ```
 
-`useActionState` is a React hook. You give it the Server Action and a starting state, and it returns **three things**:
+Three things identify **our app** to GitHub, and you create all of them when you register an "OAuth app" ([Part 2](#part-2--getting-the-github-credentials-step-by-step)):
 
-| Returned      | What it is                                                                                         |
-| ------------- | -------------------------------------------------------------------------------------------------- |
-| `state`       | **What the action last returned.** First it's `initialState`. After each submit it's the new result |
-| `formAction`  | A wrapped version of the action. **This is what goes into `<form action={...}>`**                  |
-| `pending`     | `true` while the action is running                                                                 |
+| Thing                | What it is                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Client ID**        | Public. "This is the app called Gatherly"                                                               |
+| **Client secret**    | **Private**, like a password. It proves that a request really comes from our server                     |
+| **Callback URL**     | The one address GitHub is allowed to send users back to: `http://localhost:3000/api/auth/callback/github` |
 
-That's why the form is a **Client Component** (`'use client'`): hooks only work there. Note what's *missing*: no `onSubmit`, no `fetch`, no `event.preventDefault()`. A `<form action={function}>` is all React needs.
+The callback URL is a security feature: if it didn't have to match exactly, an attacker could make GitHub send the one-time code to *their* site.
 
-### Step 3. The browser builds a `FormData`
+## 1.5 Roles: who may do what
 
-When the user presses the button, the browser collects every field into a **`FormData`** object. Each field is stored under its **`name`** attribute:
+A **role** is a label on a user that stands for a set of permissions. Gatherly has three, stored in `user.role`:
 
-```html
-<input name="title" value="Next.js Meetup" />          →  title        = "Next.js Meetup"
-<input name="price" type="number" value="12.5" />      →  price        = "12.5"        (a STRING!)
-<input type="checkbox" name="categoryIds" value="a1">  →  categoryIds  = "a1"          (only if ticked)
-<input type="checkbox" name="categoryIds" value="b2">  →  categoryIds  = "b2"          (again, same name)
+| Role        | May...                                                         |
+| ----------- | -------------------------------------------------------------- |
+| `attendee`  | Browse events and buy tickets. **Everyone starts here**        |
+| `organizer` | Everything an attendee can, **plus** create and manage events  |
+| `admin`     | Everything, **plus** manage users                              |
+
+Two principles:
+
+- **Least privilege:** give each person the **minimum** they need. That's why a new account is an `attendee`, and why `parseRole()` turns anything unknown into `attendee` (when in doubt, fewer rights).
+- **The client never chooses its own role.** The sign-up form can't send `role=admin`. Better Auth marks that field as not accepted from the client.
+
+## 1.6 Where do you check? Four layers
+
+Beginners ask: "I hid the Dashboard link from attendees, is the dashboard protected?" **No.** Anyone can type the URL. Protection comes in layers, and **each one assumes the one before it failed**:
+
+| Layer                       | Example in Gatherly                                  | What it is worth                                                                                  |
+| --------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 1. **The UI**               | The Dashboard link only shows for organizers         | **Courtesy.** Not security: a person can still type the address                                   |
+| 2. **The proxy**            | `proxy.ts` redirects visitors with **no cookie** away from `/dashboard` | **A bouncer.** It only checks that a cookie *exists*, and anyone can forge a cookie. Fast, optimistic, never enough |
+| 3. **The page**             | `requireOrganizer()` at the top of `/dashboard`      | **A lock.** It asks the **database**: is this session real, whose is it, is the role right?        |
+| 4. **The action and the query** | A Server Action that calls `requireOrganizer()`; a query that filters `WHERE organizer_id = <me>` | **The vault.** The only layer that protects the data itself, even from requests that skip your pages |
+
+Rule of thumb: **protect where the data or the change is, not only where the user clicks.** A Server Action is a public endpoint (class 6). A page check never covers the actions behind it.
+
+---
+
+# Part 2 — Getting the GitHub credentials, step by step
+
+You need a **GitHub OAuth app**. It's free and takes two minutes. You create **one app per environment**: this one is for development on your laptop (`localhost`).
+
+### Step 1: Open the developer settings
+
+1. Sign in to [github.com](https://github.com).
+2. Click your **profile picture** (top right) → **Settings**.
+3. In the left sidebar, scroll **all the way down** and click **Developer settings**.
+4. Click **OAuth Apps**, then **New OAuth App** (if it's your first, the button says **Register a new application**).
+
+Shortcut: [github.com/settings/developers](https://github.com/settings/developers).
+
+### Step 2: Fill in the form
+
+| Field                          | Value                                                | Notes                                                                       |
+| ------------------------------ | ---------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Application name**           | `Gatherly (local)`                                   | Users see this name on the "Authorize" screen. Anything you like            |
+| **Homepage URL**               | `http://localhost:3000`                              | Where your app lives. Must match the port you run on                        |
+| **Application description**    | *(optional)*                                         | Leave it empty, or write "Course project"                                   |
+| **Authorization callback URL** | `http://localhost:3000/api/auth/callback/github`     | ⚠️ **The one that matters.** Copy it exactly: same port, same path, no trailing slash |
+| **Enable Device Flow**         | *(leave unchecked)*                                  | For apps with no browser, such as a CLI                                      |
+
+Click **Register application**.
+
+> 💡 Why that exact callback URL? Better Auth serves its GitHub callback at `/api/auth/callback/github` (that's the `app/api/auth/[...all]/route.ts` file). GitHub only ever redirects users to the URL you registered. If they differ by one character, GitHub refuses with a `redirect_uri_mismatch` error.
+
+### Step 3: Copy the Client ID
+
+On the next page you'll see **Client ID**, a short string like `Ov23li...`. Copy it. It's not secret.
+
+### Step 4: Generate the Client secret
+
+1. Click **Generate a new client secret**. (GitHub may ask for your password or a 2FA code.)
+2. **Copy the secret immediately.** GitHub shows it **only once**. If you leave the page, you can't read it again, only generate a new one.
+
+### Step 5: Put them in `.env`
+
+In `class_07_auth/gatherly/.env`:
+
+```bash
+GITHUB_CLIENT_ID=Ov23liXXXXXXXXXXXXXX
+GITHUB_CLIENT_SECRET=paste-the-long-secret-here
+BETTER_AUTH_SECRET=paste-a-generated-secret-here
 ```
 
-Three things to know:
+Generate `BETTER_AUTH_SECRET` with `npx auth@latest secret` (or `openssl rand -base64 32`). It's a separate secret: it signs and encrypts Better Auth's data, and has nothing to do with GitHub.
 
-1. **Everything is a string** (or a file). Even `type="number"`. You convert later.
-2. **`name` is the key.** No `name` → the field is not sent. The names must match the keys in your Zod schema.
-3. **A repeated name means a repeated entry.** Two ticked checkboxes called `categoryIds` give two entries. `Object.fromEntries(formData)` keeps only the **last** one, so the action reads them with `formData.getAll('categoryIds')`, which returns an array.
+### Step 6: Restart and test
 
-### Step 4. The action starts (server)
+1. **Restart `npm run dev`.** Environment variables are read **when the server starts**, so the new values are invisible until you do.
+2. Open [/sign-in](http://localhost:3000/sign-in): the **Continue with GitHub** button should be there.
+3. Click it → GitHub asks you to authorize → you land back on Gatherly, and the header shows your name.
+4. Look in the database: a row in `user`, one in `account` (`provider_id = 'github'`), one in `session`.
+
+### 🔒 Keep the secret secret
+
+- `.env` is in `.gitignore` for a reason: **never commit it**. The template `.env.example` has the variable names and **empty** values, and that's what gets committed.
+- If the secret leaks (pushed to GitHub, pasted in a chat), go back to the OAuth app and click **Generate a new client secret**, then **delete the old one**. Treat a leaked secret as burned.
+- **Production needs its own OAuth app**, with your real address: Homepage `https://your-domain.com`, callback `https://your-domain.com/api/auth/callback/github`. Put its id and secret in your hosting provider's environment variables, never in the repository.
+
+### Troubleshooting
+
+| Problem                                                          | Likely cause → fix                                                                                          |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| No "Continue with GitHub" button                                 | One of `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` is empty or missing, or you didn't restart the dev server |
+| GitHub shows `redirect_uri_mismatch`                             | The registered callback URL isn't exactly `http://localhost:3000/api/auth/callback/github`. Check the port (3000 vs 3001) and typos |
+| `Application not found` / "Not Found" on GitHub                  | The client id is wrong or has a typo (extra space, missing character)                                       |
+| `Bad credentials` / error right after authorizing                | The client **secret** is wrong, or you regenerated it and kept the old value                                |
+| I lost the client secret                                         | You can't read it again. Click **Generate a new client secret** and update `.env`                           |
+| The app runs on another port (e.g. 3001)                         | Edit the OAuth app's Homepage and callback URLs to use that port, or stop whatever uses 3000                |
+| An error about the email (`email_not_found`)                     | Your GitHub account has no email Better Auth can read. Add an email in GitHub → Settings → Emails, and uncheck "Keep my email addresses private" or make sure a primary email exists |
+
+---
+
+# Part 3 — Implementing Better Auth, step by step
+
+This is what we did in class, in order. Each step names the file, so you can open it and compare. (To add authentication to **your own** project, follow the same steps.)
+
+## Step 1. Install
+
+```bash
+npm install better-auth @better-auth/drizzle-adapter
+```
+
+- `better-auth`: the library.
+- `@better-auth/drizzle-adapter`: lets it read and write through **our Drizzle `db`**. (Better Auth's docs import it from `better-auth/adapters/drizzle`; in version 1.7 it's also its own package. Either way, copy the import you find in your `package.json` version.)
+
+## Step 2. Environment variables
+
+`BETTER_AUTH_SECRET` (a long random string) and, optionally, the two GitHub values from [Part 2](#part-2--getting-the-github-credentials-step-by-step). The docs also mention `BETTER_AUTH_URL` (your app's base URL, e.g. `http://localhost:3000`): optional locally, but set it in production.
+
+## Step 3. The auth server: `db/auth.ts`
+
+The one file where Better Auth is **configured**. Read it top to bottom, it's short:
 
 ```ts
-'use server';
-
-export async function createEvent(_prev: CreateEventState, formData: FormData): Promise<CreateEventState> {
-```
-
-- **`'use server'`** at the top of the file marks every exported function as a Server Action. So every export must be `async`. (Exporting *types* is fine; they vanish when compiled.)
-- The signature `(previousState, formData)` is the one `useActionState` expects: it passes the **previous state** first, then the **form data**. We don't need the previous state, so it's called `_prev`. The underscore tells ESLint "unused on purpose".
-- It returns the **new state**, which becomes `state` in the form.
-
-> 🔒 **The most important sentence of this class:** a Server Action is a **public HTTP endpoint**. Anyone can send it a POST request with any data, without ever opening your form (with curl, or by editing the HTML in DevTools). Next.js docs say it plainly: Server Actions "are reachable via direct POST requests, not just through your application's UI". So the action must **never trust its input** and must **check who is calling**. Everything that follows is built on that.
-
-### Step 5. Authenticate: who is asking?
-
-```ts
-const organizer = await getDemoOrganizer();
-```
-
-The first thing an action asks is *who is this?* There's no sign-in in the app yet, so `db/demo-users.ts` returns a fixed, seeded user (handle `avenga`). When authentication arrives, this one line is replaced by "read the real session, and stop with an error if nobody is signed in".
-
-The key point: **the organizer comes from the server, never from the form.** If the form had a hidden `<input name="organizerId">`, anyone could change it in DevTools and create events *as someone else*.
-
-> ⚠️ A page-level check does **not** protect the actions inside it. Even if only organizers can open `/dashboard/events/new`, the action is its own endpoint and must check again by itself.
-
-### Step 6. Validate with Zod
-
-First the schema describes what a **valid** form looks like, once:
-
-```ts
-const CreateEvent = z.object({
-  title: z.string().trim().min(3, { error: 'Title must be at least 3 characters long' }).max(120),
-  price: z.coerce.number().min(0, { error: "Price can't be a negative number" }),
-  categoryIds: z.array(z.uuid()).min(1, { error: 'Pick at least one category' }),
-  // ... description, venueId, startsAt, endsAt, quantity
-}).refine((event) => event.endsAt > event.startsAt, {
-  error: 'Event must end after it starts',
-  path: ['endsAt'],
+export const auth = betterAuth({
+  database: drizzleAdapter(db, { provider: 'pg', schema }),         // 1. where the data lives
+  emailAndPassword: { enabled: true, minPasswordLength: 8, autoSignIn: true },  // 2. passwords
+  socialProviders: github,                                           // 3. "Continue with GitHub"
+  user: { additionalFields: { handle: { type: 'string', required: false, unique: true, input: false } } },  // 4. an extra column
+  plugins: [admin({ defaultRole: 'attendee', adminRoles: ['admin'] }), nextCookies()],     // 5. roles + Server Action cookies
 });
 ```
 
-What to notice:
+| Option                | What it does                                                                                                         |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `database`            | Stores users and sessions in **PostgreSQL**, through Drizzle, using the tables in `db/auth-schema.ts`                |
+| `emailAndPassword`    | Turns on password sign-up. `autoSignIn`: signed in right after sign-up. The password is **hashed**                   |
+| `socialProviders`     | Turns on GitHub. It's built conditionally: **no env values → no GitHub**, and the app still starts                   |
+| `additionalFields`    | Adds our own column to `user`. `input: false`: the **client can't set it**, only our server                          |
+| `admin(...)` plugin   | Adds a `role` to every user (default `attendee`), and `banned` / `banReason` / `banExpires`                          |
+| `nextCookies()` plugin | Lets **Server Actions** set the session cookie. Docs: it must be the **last** plugin                                |
 
-| Piece                              | What it does                                                                                   |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `z.string().trim().min(3)`         | Text, spaces trimmed first, at least 3 characters                                              |
-| `{ error: '...' }`                 | The message the user sees. (This is **Zod 4** syntax. Old Zod 3 tutorials use `{ message }`, which is wrong here) |
-| `z.coerce.number()`                | **Converts first, checks second.** The form sends `"12.5"`, and this turns it into `12.5`      |
-| `z.coerce.date()`                  | Turns `"2027-03-12T09:00"` into a `Date`                                                       |
-| `z.uuid()`                         | Must look like an id. A `<select>` sends the venue's id as text                                |
-| `z.array(z.uuid()).min(1)`         | The ticked checkboxes: a list with at least one id                                             |
-| `.refine(...)` with `path`         | A rule that compares **two fields** ("ends after it starts"). `path` says which field shows the error |
+The file starts with `import 'server-only'`: it holds secrets, so a Client Component importing it **fails the build**. At the bottom, `typeof auth.$Infer.Session` gives us a `Session` type that matches this exact configuration (so `session.user.role` is typed).
 
-Then the action runs it:
+## Step 4. The database tables
+
+Better Auth needs four tables: `user`, `session`, `account`, `verification`. The CLI can write them for you in Drizzle's format:
+
+```bash
+npx auth@latest generate
+```
+
+That produced `db/auth-schema.ts`. Then the normal Drizzle workflow from class 3:
+
+```bash
+npm run db:generate     # writes drizzle/0004_*.sql: READ IT
+npm run db:migrate      # applies it
+```
+
+What `0004_petite_penance.sql` does. Open it and find each line:
+
+| In the migration                                                                 | What it means                                                                         |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `CREATE TABLE "user"`, `"session"`, `"account"`, `"verification"`                | The four Better Auth tables                                                           |
+| `DROP TABLE "users" CASCADE`                                                     | Our **old** `users` table is deleted. Better Auth's `user` replaces it ⚠️ data loss    |
+| `ALTER COLUMN "organizer_id" SET DATA TYPE text` (and `"user_id"` on orders)     | Better Auth's ids are **strings**, our old ones were uuids, so the columns pointing at users change type |
+| `ADD CONSTRAINT "events_organizer_id_user_id_fk" ...`                            | `events.organizer_id` now points at `user.id`. Same for `orders.user_id`              |
+
+**Why one user table?** An organizer is a user. Keeping two tables ("Better Auth's users" and "our users") means keeping them in sync forever. One table, with our own columns added (`handle`, `role`), is simpler. The change in `db/schema.ts` is small: `import { user } from './auth-schema'`, and the foreign keys point there.
+
+## Step 5. The route handler: `app/api/auth/[...all]/route.ts`
 
 ```ts
-const parsed = CreateEvent.safeParse(raw);
-
-if (!parsed.success) {
-  return { errors: z.flattenError(parsed.error).fieldErrors, values };
-}
+export const { GET, POST } = toNextJsHandler(auth);
 ```
 
-- **`safeParse`** never throws. It gives `{ success: true, data }` or `{ success: false, error }`. (`parse` would throw, and a thrown error crashes the request.)
-- **`z.flattenError(error).fieldErrors`** reshapes Zod's error into something the form can use directly:
+Two lines that expose Better Auth over HTTP, under `/api/auth/*`: sign-in, sign-out, get-session, and the `callback/github` URL from Part 2. `[...all]` is a **catch-all** segment, and `route.ts` is the special file for API endpoints (the counterpart of `page.tsx`). Keep this path: it's Better Auth's default, and the GitHub callback depends on it.
 
-```json
-{
-  "title":    ["Title must be at least 3 characters long"],
-  "endsAt":   ["Event must end after it starts"],
-  "categoryIds": ["Pick at least one category"]
-}
-```
-
-- After a successful parse, `parsed.data` is **clean and typed**: real `Date` objects, real numbers, real arrays. Nothing downstream has to wonder.
-
-**Why validate on the server when the inputs already have `required` and `min`?** Those attributes are only a convenience for honest users, and anyone can remove them in DevTools or skip the form completely. **The server is the only place where validation counts.** (Try it, see exercise 2.)
-
-### Step 7. Return the errors, don't throw them
-
-On a validation failure the action **returns** a state object:
+## Step 6. The auth client: `lib/auth-client.ts`
 
 ```ts
-export type CreateEventState = {
-  errors?: Partial<Record<Field, string[]>>;   // one list of messages per field
-  message?: string;                            // a message about the whole form
-  values?: Partial<Record<Field, string | string[]>>;   // what the user typed
-};
-```
-
-Returning (instead of throwing) is what lets the form show a message **next to each wrong field**. React puts the returned object in `state`, the form re-renders, and each `<Field errors={state.errors?.title}>` prints its messages through `<FieldErrors>`.
-
-**Why `values`?** Here's the timeline that surprises everyone:
-
-```
-1. The user fills in 8 fields and presses submit.
-2. The action runs and returns errors.
-3. React RESETS the form after an action runs (uncontrolled inputs go back to their defaults).
-4. Without `values`, the user would find EVERY field empty again, because one field was wrong.
-```
-
-So the action sends back what was typed (`values`), and every input uses it as its starting value: `defaultValue={value('title')}`. That's why the inputs use **`defaultValue`** (uncontrolled) and not `value` + `onChange`: the browser owns the text while the user types, and we only decide where it starts.
-
-### Step 8. Check the data against the database
-
-```ts
-const venue = await db.query.venues.findFirst({ where: eq(venues.id, input.venueId) });
-if (!venue) return { errors: { venueId: ["That venue doesn't exist"] }, values };
-```
-
-Validation checks the **shape** of the data ("this looks like an id"). It can't know the venue **exists**. Someone can submit any valid-looking id, so we look it up. This is **authorization / checking the world**, the step between validating and writing.
-
-(An honest note: the category ids get no such check. A made-up category id would fail later at the database's foreign key, as an unhandled error. Exercise 8 is about that.)
-
-### Step 9. Save, inside a transaction
-
-```ts
-await db.transaction(async (tx) => {
-  const [insertedEvent] = await tx.insert(events).values({ ...input, slug, organizerId: organizer.id, city: venue.city, minPriceCents: priceCents, status: 'draft' }).returning({ id: events.id });
-  await tx.insert(eventCategories).values(categoryIds.map((categoryId) => ({ eventId: insertedEvent.id, categoryId })));
+export const authClient = createAuthClient({
+  plugins: [adminClient(), inferAdditionalFields<typeof auth>()],
 });
+export const { signIn, signUp, signOut, useSession } = authClient;
 ```
 
-Each detail has a reason:
+The browser-side twin of `auth`. It has **no secrets**: it just sends requests to `/api/auth/*`, and the browser attaches the cookie. The plugins give it the same types the server has (the `role`, the extra `handle`). Note `import type { auth }`: **only the type** crosses over, no server code.
 
-| Detail                                          | Why                                                                                              |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| **Transaction**                                 | The event and its category links are saved **together or not at all**. No event left without categories if the second insert fails |
-| `.returning({ id })`                            | PostgreSQL generates the id. We need it for the second insert                                    |
-| `priceCents = Math.round(price * 100)`          | Money is stored as whole **cents**. `12.50 * 100` can be `1249.9999999999998` in floating point, so we round |
-| `organizerId: organizer.id`                     | From the **session**, never from the form (see Step 5)                                           |
-| `city: venue.city`                              | Copied from the venue, so the list page can filter by city without a JOIN                        |
-| `status: 'draft'`                               | New events start as drafts. The organizer publishes them later                                   |
-| `slug: await uniqueSlug(title)`                 | "Next.js Conf 2027!" → `next-js-conf-2027`. If it's taken, a short random suffix is added        |
+| You write                                         | What it does                                                         |
+| ------------------------------------------------- | -------------------------------------------------------------------- |
+| `signIn.social({ provider: 'github', callbackURL })` | Starts the GitHub flow                                            |
+| `signIn.email({ email, password })`               | Signs in with a password                                             |
+| `signUp.email({ name, email, password })`         | Creates an account                                                   |
+| `signOut()`                                       | Ends the session                                                     |
+| `useSession()`                                    | A hook: `{ data: session, isPending }`. Re-renders when it changes   |
 
-### Step 10. Revalidate, then redirect
+## Step 7. Reading the user on the server: `lib/session.ts`
 
 ```ts
-revalidatePath('/dashboard');
-redirect('/dashboard');
+await auth.api.getSession({ headers: await headers() })
 ```
 
-- **`revalidatePath('/dashboard')`**: *"the data behind this page changed, render it again."* Next.js may remember (cache) a rendered page. We just added an event, so the dashboard must not show its old list. A mutation without a revalidate is a classic bug: the data is saved, but the screen doesn't change.
-- **`redirect('/dashboard')`**: send the browser to the list, where the new draft appears at the top.
+We hand Better Auth the request's headers. It reads the cookie, finds the session row, checks it hasn't expired, and returns `{ session, user }` or `null`. Three helpers build on it:
 
-Two rules about `redirect`:
+| Helper                     | Returns / does                                               | Failure                                    |
+| -------------------------- | ------------------------------------------------------------ | ------------------------------------------ |
+| `getCurrentUser()`         | The user, or `null`. **Never redirects**                     | `null`                                     |
+| `requireUser(returnTo)`    | A signed-in user                                             | Redirect to `/sign-in?next=<returnTo>`     |
+| `requireOrganizer(returnTo)` | A signed-in **organizer or admin**                         | Not signed in → sign-in. Wrong role → `/organizers-only` |
 
-1. It works by **throwing a special error** (`NEXT_REDIRECT`) that Next.js understands, so **no code after it runs**, and the function has no `return` on success.
-2. Because it throws, it must **not be inside a `try/catch`**: the `catch` would swallow it and nothing would redirect. Call it outside, as we do here.
+Use one **at the top** of every page, action or query that needs a user:
 
-### Step 11. The pending state: don't let people click twice
+```ts
+const organizer = await requireOrganizer('/dashboard');   // stops here if not allowed
+```
 
-While the action runs (a few hundred milliseconds, or seconds on a slow network), a user may click again and create **two events**. The form prevents this with two tools, because they solve slightly different problems:
+Because `redirect()` throws, nothing below that line runs, and TypeScript knows `organizer` is a real user afterwards.
 
-| Tool                | Where it comes from                | Where you can use it                                                     |
-| ------------------- | ---------------------------------- | ------------------------------------------------------------------------ |
-| `pending` (the 3rd value of `useActionState`) | `react`          | In the **same component** that calls `useActionState`. We use it for `aria-busy` on the form |
-| `useFormStatus()`   | `react-dom`                        | In a **child component inside the `<form>`**, never in the component that renders the form |
+## Step 8. The proxy: `proxy.ts`
 
-That second rule is why `SubmitButton` is its own file. It calls `useFormStatus()`, reads `pending`, and returns a button that is **disabled** and shows "Creating event..." while the action runs. Put in the same component as the `<form>`, `useFormStatus` would always say `false`.
+Code that runs **before** a request reaches a page (in Next.js 16 `proxy.ts` replaces `middleware.ts`, and the function is called `proxy`). Ours sends anyone **without a session cookie** away from `/dashboard/*` to the sign-in page, remembering where they were going in `?next=`:
 
-### Step 12. Accessibility: forms are for everyone
+```ts
+export const config = { matcher: ['/dashboard/:path*'] };   // run only for these paths
+```
 
-| Practice                         | In our form                                                                                           |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Every control has a **label**    | `<label htmlFor="title">` and `<Input id="title">`. The `htmlFor` must equal the `id`: clicking the label focuses the field, and screen readers read it |
-| Group related controls           | The checkboxes are in a `<fieldset>` with a `<legend>` ("Categories")                                 |
-| Show errors **next to** the field | `<FieldErrors>` under each field, in red (`text-destructive`)                                        |
-| Say it's busy                    | `aria-busy={pending}` on the form                                                                     |
-| Link an error to its field       | `aria-describedby="title-error"` on the input. The error elements already have ids (`title-error`), but the inputs don't point at them yet. A good exercise |
+> ⚠️ `getSessionCookie` only checks that a cookie **exists**, not that it's valid. Anyone can create a cookie by hand in the browser (exercise 3). So the proxy is a fast first filter for honest visitors, and the **real** check is `requireOrganizer()` inside the page. Better Auth's docs give the same warning. Also keep the proxy **cheap**: no database calls in it.
 
-## 1.4 `useActionState` or `useFormStatus`?
+## Step 9. The sign-in UI
 
-| You want to...                                               | Use                           |
-| ------------------------------------------------------------ | ----------------------------- |
-| Show the action's **result** (errors, values, a message)     | `useActionState`              |
-| Know "is this form submitting?" in the **form component**    | `pending` from `useActionState` |
-| Disable a button / show a spinner in a **child** of the form | `useFormStatus`               |
-| Show a result instantly, before the server answers           | `useOptimistic` (later)       |
+| File                                        | Job                                                                                                |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `app/(marketing)/sign-in/page.tsx`, `sign-up/page.tsx` | Server pages: read `?next=` and whether GitHub is configured, then render the form     |
+| `app/(marketing)/_components/auth.form.tsx` | Client Component: the title and the **Continue with GitHub** button (`signIn.social`)              |
+| `app/(marketing)/_components/safe-next.ts`  | Makes the `?next=` value **safe** (see below)                                                      |
+| `components/account-menu.tsx`               | Client Component in the header: "Sign in", or name + Dashboard (organizers) + "Sign out"           |
+| `app/(marketing)/organizers-only/page.tsx`  | The "403" page for signed-in attendees                                                             |
 
-Both need a Client Component. Neither is needed for a form to *work*: `<form action={serverAction}>` alone already submits. They add **feedback**.
+Two details worth understanding:
 
-## 1.5 Progressive enhancement: it works before JavaScript loads
+**Why does the server page read the env vars and pass a `boolean`?** A Client Component must never see `process.env.GITHUB_CLIENT_SECRET`. The server page checks that both values exist and passes only `githubEnabled: true | false` down.
 
-Because the form is a real `<form>` with an `action`, the browser can submit it even if the JavaScript hasn't loaded yet (slow phone, flaky network) or failed. Next.js then does a normal full-page request and renders the result. Once JavaScript is ready, the same form is submitted without a reload. That's called **progressive enhancement**: the basic thing always works, and JavaScript makes it nicer.
+**Why `safeNext`?** After signing in, we send people back to the page they wanted (`/sign-in?next=/dashboard`). But `next` is **user input**: someone could send a victim `/sign-in?next=https://evil.example`, and if we obeyed, the victim would sign in on *our* site and land on *theirs*. That's an **open redirect**. `safeNext` only accepts a **path on our site** (one leading `/`, not `//`). (One hole remains: browsers read a backslash like a slash, so `/\evil.example` slips through. A stricter version rejects `\`. See exercise 8.)
 
-This is the reason to prefer `<form action={...}>` over `onSubmit` + `fetch`. Try it: DevTools → Settings → "Disable JavaScript", reload, and submit the form.
+**Why `router.refresh()` after `signOut()`?** The page on screen was rendered by the server for the *old* user. `refresh()` re-runs the Server Components, so a protected page doesn't stay visible after you sign out.
 
-## 1.6 Security checklist for every Server Action
+## Step 10. Roles
 
-Before you call an action done, check each item:
+| File             | Job                                                                                          |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| `types/role.ts`  | `type Role = 'attendee' \| 'organizer' \| 'admin'`                                           |
+| `lib/roles.ts`   | `parseRole()`: any string → a valid `Role` (unknown → `attendee`). `canManageEvents(role)`   |
 
-1. ✅ **Authenticate**: does it know who is calling, from the **server** (session), not from the form?
-2. ✅ **Validate**: is every input checked with a schema (`safeParse`), including types, lengths and ranges?
-3. ✅ **Authorize**: may *this* user do this to *this* record? (Is it their event? Does the venue exist?)
-4. ✅ **Never trust hidden fields or bound arguments**: `<input type="hidden">` and `action.bind(null, id)` both come from the browser too. Re-check them, and put ownership in the `WHERE` of an update.
-5. ✅ **Order matters**: authenticate → validate → authorize → change data → revalidate → return or redirect.
-6. ✅ **Fail gracefully**: bad input returns messages. A user should never see a stack trace.
+`user.role` is plain **text** in the database, so it could hold a typo. `parseRole` is the safety net, and `canManageEvents` is the **one place** that says who may manage events. Change the rule there and it changes everywhere. The `admin` plugin only knows `admin` and `user` itself; **`organizer` is our own role**, a string that our code understands.
 
-## 1.7 Gotchas in this form (found while reading it)
+## Step 11. Protect things
 
-These are in the code comments too. They make great discussion points:
+| What                                  | Status in this snapshot                                                                           |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `/dashboard` page                     | ✅ `requireOrganizer('/dashboard')` + the proxy                                                    |
+| `/dashboard/events/new` **page**      | ❌ only the proxy (a cookie check). A signed-in attendee can open it                               |
+| `createEvent` **Server Action**       | ❌ still the demo organizer from class 6 (and it no longer compiles: the `users` table is gone)    |
+| The dashboard **query**               | ❌ `getOrganizerEvents(organizer.id)` receives the id and **ignores** it: everyone sees everything |
 
-| Gotcha                                                                      | What happens / the fix                                                                                      |
-| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| An **empty number field** becomes `0` with `z.coerce.number()`              | An empty price silently means "free", and the "Enter a price" message can never appear. Check for `""` first |
-| `datetime-local` has **no time zone**                                       | `"2027-03-12T09:00"` is read in the **server's** zone (your laptop now, UTC once deployed), so times can shift |
-| After an error, the **`<select>`** may jump back to its first option        | React restores the option it mounted with. Add `key={value('venueId')}` so it rebuilds                      |
-| The venue's **label doesn't focus** its select                              | `<Field name="venue">` but the select's `id` is `venueId`. `htmlFor` must equal `id`                        |
-| `errors?.length && <X />` can render a stray **"0"**                        | React prints the number 0. Write `errors && errors.length > 0 && ...`                                       |
-| `uniqueSlug` **checks, then inserts**                                       | Two people submitting the same title at once can both pass the check. The database's UNIQUE constraint is the real guard: catch that error and retry |
-| `quantity` is **validated but never saved**                                 | It's meant for the `ticket_types` table, which the action doesn't fill yet (ESLint reports it as unused)    |
+Closing these gaps is the best practice for this class. See [Part 4](#part-4--authorization-in-practice) and the exercises.
+
+## Step 12. Test it
+
+| Do this                                                              | You should see                                                                |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Open `/dashboard` signed out                                         | Redirect to `/sign-in?next=%2Fdashboard`                                      |
+| Click **Continue with GitHub**, authorize                            | Back on the site; the header shows your name                                  |
+| Check the database                                                   | New rows in `user`, `account` (`github`) and `session`                        |
+| Open `/dashboard` as an attendee                                     | "The dashboard is for organizers"                                             |
+| Promote yourself (SQL above), reload `/dashboard`                    | The dashboard opens; the header has a **Dashboard** link                      |
+| Click **Sign out**                                                   | The header says **Sign in**; `/dashboard` redirects you again                 |
+| DevTools → Application → Cookies                                     | A `better-auth.session_token` cookie while signed in, marked **HttpOnly**     |
+| Open `/sign-in?next=https://example.com`, sign in                    | You land on the home page, **not** on example.com                             |
+
+## Follow one request: visiting `/dashboard`
+
+```
+browser ── GET /dashboard (+ the session cookie) ──►
+   1. proxy.ts            cookie exists?   no  → redirect to /sign-in?next=/dashboard
+                                           yes ↓
+   2. the dashboard page  requireOrganizer('/dashboard')
+        └ getCurrentUser   auth.api.getSession({ headers }) → looks the token up in the `session` table
+              no session            → redirect to /sign-in
+              session, wrong role   → redirect to /organizers-only
+              session, organizer    ↓
+   3. getOrganizerEvents  reads the events (should filter by organizer: see Known issues)
+   4. the page renders    and is sent to the browser
+```
 
 ---
 
-# Part 2 — The new database tables
+# Part 4 — Authorization in practice
 
-This class's migration adds the groundwork for **selling tickets**. Run `npm run db:migrate` and PostgreSQL gets three new tables and one new type (`drizzle/0003_*.sql`):
+## 4.1 The guard pattern
 
+At the top of anything that needs a permission:
+
+```ts
+const organizer = await requireOrganizer('/dashboard/events/new');
 ```
-events ──< ticket_types          what you can buy, its price, how many exist
-users  ──< orders >── events     one purchase: who bought, for which event, how much
-orders ──< tickets >── ticket_types   one row per admission, each with a UNIQUE code
+
+For a **page**, the redirect sends the user somewhere helpful. For a **Server Action**, remember that it's a public endpoint: a script calling it directly gets the redirect too, which is fine, it's refused. What matters is that the **check is the first thing that runs**.
+
+## 4.2 Ownership: "is this MINE?"
+
+Being an organizer doesn't mean you can touch **every** event, only **your own**. Checking the **role** is not enough. You also check **ownership**. Forgetting this is the most common serious security bug in web apps, so common it has a name: **broken access control** (OWASP's #1). Two classic forms:
+
+- **Seeing other people's data.** `getOrganizerEvents` returns every event instead of the signed-in organizer's. (That's the gap in this snapshot.)
+- **Changing other people's data (IDOR).** A "publish" button sends `eventId`. If the action does `UPDATE events SET status = 'published' WHERE id = <eventId>`, **any** organizer can publish **anyone's** event by changing the id in the request.
+
+The fix is always the same: **put the owner in the `WHERE`**:
+
+```ts
+// reading
+db.query.events.findMany({ where: eq(events.organizerId, organizer.id), ... })
+
+// changing: only a row that is BOTH this id AND mine
+await db.update(events)
+  .set({ status: 'published' })
+  .where(and(eq(events.id, eventId), eq(events.organizerId, organizer.id)))
+  .returning({ id: events.id });   // empty result = "not yours (or doesn't exist)"
 ```
 
-| Table          | Columns worth knowing                                                                              |
-| -------------- | -------------------------------------------------------------------------------------------------- |
-| `ticket_types` | `event_id`, `name` ("Standard", "VIP"), `price_cents`, `quantity` (how many exist)                 |
-| `orders`       | `user_id`, `event_id`, `status` (`pending` / `paid` / `refunded` / `canceled`), `total_cent`       |
-| `tickets`      | `order_id`, `ticket_type_id`, `code` (**unique**, what the QR code will carry), `attendee_name`    |
+The owner id comes from **the session** (`organizer.id`), never from the form or the URL.
 
-Things to understand:
+## 4.3 Where each check lives
 
-- **They're unused for now.** No page reads or writes them. They exist so the next features (reserving tickets, the QR check-in) have somewhere to go.
-- **Delete rules** (`onDelete`): a ticket type disappears when its event is deleted (`cascade`), and tickets disappear with their order (`cascade`). But you **can't** delete a user or an event that has orders, or a ticket type that has tickets (the default, "no action"). That protects sales history.
-- **Spelling trap:** event statuses use `'cancelled'` (two l's), order statuses use `'canceled'` (one l). Both are valid English, and mixing them up is an easy bug, so copy them exactly.
-- **Relations** were added (`ticketTypesRelations`, `ordersRelations`, `ticketsRelations`, and `ticketTypes: many(...)` on events) so queries can use `with: { ticketTypes: true }`.
-- **Types** are derived from the tables again: `TicketType`, `Order`, `Ticket`, and `EventStatus` / `OrderStatus` from the enums' `enumValues`.
+| Layer           | File(s)                                          | Done?                                            |
+| --------------- | ------------------------------------------------ | ------------------------------------------------ |
+| UI              | `components/account-menu.tsx`                    | ✅ (courtesy only)                                |
+| Proxy           | `proxy.ts`                                       | ✅ cookie check                                   |
+| Page            | `dashboard/page.tsx`                             | ✅ · `dashboard/events/new/page.tsx` ❌            |
+| Action          | `app/actions/events.ts`                          | ❌ demo organizer                                 |
+| Query           | `db/queries/dashboard.ts`                        | ❌ ignores the owner                              |
 
-How to read the migration: open `drizzle/0003_*.sql` and match each `CREATE TABLE` to the table in `db/schema.ts`. That's the workflow from class 3 (`generate`, read, `migrate`).
+## 4.4 Common mistakes
+
+| Mistake                                                         | Why it hurts                                                                          |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| "I hid the button" is the protection                            | The URL still works. Check on the server                                              |
+| Trusting a cookie's **existence** (the proxy alone)             | Cookies can be forged. Validate the session with `getSession`                         |
+| Checking the role but not the **owner**                         | Any organizer reads or edits any organizer's data                                     |
+| Taking `userId` / `organizerId` / `role` from a **form field**  | The user can edit it. Take it from the session                                        |
+| Guarding the page but not the **action** behind it              | The action is its own public endpoint                                                 |
+| Redirecting to a `?next=` **without checking it**               | Open redirect: your site becomes a phishing tool                                      |
+| Telling the world *why* a login failed ("no such email")        | Helps attackers find real accounts. Say "invalid email or password"                   |
+| Committing `.env`                                               | The secrets are public forever, even if you delete the file later                     |
 
 ---
 
-# Part 3 — Route groups and the two shells
-
-A folder name in **parentheses** is a **route group**: it organises files and shares a layout, but it is **not part of the URL**.
+# Part 5 — What changed in the data
 
 ```
-app/
-├── layout.tsx                      ← root: only <html>, <body>, fonts, metadata
-├── (marketing)/                    ← the public site
-│   ├── layout.tsx                  ← header + centred <main> + footer
-│   ├── page.tsx                    ← "/"            (the home page)
-│   ├── about/page.tsx              ← "/about"
-│   └── events/
-│       ├── layout.tsx              ← breadcrumb
-│       ├── page.tsx                ← "/events"
-│       ├── _components/            ← private folder: not a route
-│       └── [slug]/page.tsx         ← "/events/some-event"
-├── (dashboard)/                    ← the organizer area
-│   ├── layout.tsx                  ← sidebar, no site header
-│   └── dashboard/
-│       ├── page.tsx                ← "/dashboard"
-│       └── events/new/page.tsx     ← "/dashboard/events/new"  (the form from Part 1)
-└── actions/
-    └── events.ts                   ← Server Actions (not a route: no page.tsx)
+BEFORE (classes 3–6)                         NOW (class 7)
+
+users (uuid id)                              user (text id)       ◄── Better Auth's table
+  ▲                                            ▲   ▲   ▲
+  │ events.organizer_id (uuid)                 │   │   └ session.user_id        (cascade)
+  │ orders.user_id (uuid)                      │   └──── account.user_id        (cascade)
+                                               │ events.organizer_id (text)
+                                               │ orders.user_id (text)
+                                             verification (standalone)
 ```
 
-Why? Before, the header and footer lived in the root layout, so **every** page had them. A dashboard shouldn't. With groups, each part of the app gets its own frame:
-
-```
-/events     RootLayout ─► MarketingLayout (header, footer) ─► EventsLayout (breadcrumb) ─► page
-/dashboard  RootLayout ─► DashboardLayout (sidebar)                                      ─► page
-```
-
-- The group name **never appears in the URL**. That's why the folder is `(dashboard)/dashboard/`: the outer one is the group, the inner one gives `/dashboard`.
-- **Two pages can't resolve to the same URL.** `app/page.tsx` and `app/(marketing)/page.tsx` would both be `/`. (A [known issue](#known-issues-in-this-snapshot).)
-- The **root layout** is the only one that renders `<html>` and `<body>`. Groups add frames *inside* it.
-- Layouts stay mounted while you move between pages of the same group. Moving to the *other* group changes the whole shell.
-- A **private folder** (`_components`) starting with an underscore is never a route. It keeps the pieces that belong to one page next to it. `app/actions/` isn't a route either, simply because it has no `page.tsx`.
-
----
-
-# Part 4 — Filters and pagination in the URL
-
-Every control on `/events` changes the **URL**, and the server re-renders. There are three mechanisms, each the simplest one that works:
-
-| Control                 | Mechanism                                              | Client JavaScript? |
-| ----------------------- | ------------------------------------------------------ | ------------------ |
-| Search box (`?q=`)      | `useRouter().replace()` after a debounce               | yes (reacts while typing) |
-| Category pills          | plain `<Link href="/events?category=meetup">`          | no                 |
-| City / date / sort      | a `<Form>` from `next/form` that submits with GET      | no                 |
-
-**`next/form`'s `<Form>`** is a `<form>` that, submitted with GET, becomes a client-side **navigation** to `/events?city=...&from=...&sort=...`: no full reload, and it works without JavaScript. A GET form **replaces the whole query string**, so to keep the search text and category the form re-sends them as **hidden inputs**. Compare with Part 1: that was a POST form (it *changes* data), this is a GET form (it only *reads*). A GET form never needs a Server Action.
-
-**`eventsHref(filters, patch)`** (`lib/event-filters.ts`) builds a `/events` URL from the current filters, changing only what's in `patch`. Every pill and pagination link uses it, so they all keep the user's other filters. It leaves out defaults (no `?sort=date`, no `?page=1`).
-
-**The Zod schema** (the same idea as in the action) stays **forgiving**: anything invalid falls back to a default instead of crashing.
-
-| Param      | Rule                                                    | `?x=garbage` becomes |
-| ---------- | ------------------------------------------------------- | -------------------- |
-| `q`        | trimmed text, at least 1 character                      | no filter            |
-| `category`, `city` | any non-empty text                              | matches nothing      |
-| `from`     | `z.iso.date()`, a real date as `YYYY-MM-DD`             | no filter            |
-| `sort`     | `z.enum(['date', 'price', 'newest'])`                   | `'date'`             |
-| `page`     | `z.coerce.number().int().min(1)`                        | `1`                  |
-
-*Pages are forgiving, actions are strict:* in a page, bad URL input becomes "no filter". In an action, bad form input becomes an **error message** the user must fix.
-
-**Pagination = `LIMIT` + `OFFSET`.** We show 6 events per page (`PAGE_SIZE`): page 1 skips 0 rows, page 2 skips 6, page 3 skips 12. To print "Page 2 of 5" we also need the total number of matches: `db.$count(events, where)`, using the **same** `where`. The page rows and the count are independent, so they run **at the same time** with `Promise.all`. `pageCount = Math.ceil(total / PAGE_SIZE)`, at least 1.
-
-**Handle the empty cases.** `EventResults` decides between: (1) results on this page; (2) the page is **past the end** (`?page=99`): "There are only N pages", with a link to the last page; (3) **nothing matches**: "No events match", with a link to clear the filters. The check `events.length === 0 && total > 0` separates (2) from (3).
-
-**Building the query.** `browseConditions` starts with `status = 'published'` and **adds one condition per filter the user set**, then joins them with `and(...)`. The category filter uses a **subquery** (`inArray(events.id, <inner select>)`), because events and categories are many-to-many. `sortOrder` maps `?sort=` to an `ORDER BY` (with a tie-breaker), and `selectDistinct` gives each city once for the dropdown.
-
-> 💡 Searching while on page 3 keeps `?page=3`. A cleaner behaviour is `next.delete('page')` in `search-box.tsx`. Try it as an exercise.
-
----
-
-# Part 5 — Streaming with `<Suspense>` and a skeleton
-
-Recall class 02's `/streaming` example. The events page does the same for real:
-
-```tsx
-<Suspense key={JSON.stringify(filters)} fallback={<EventGridSkeleton />}>
-  <EventResults filters={filters} />
-</Suspense>
-```
-
-`EventResults` awaits the database, so it *suspends*. Everything outside the boundary (heading, search box, filters) is sent immediately, the **skeleton** shows in the gap, and the real grid is streamed in when its query finishes.
-
-- **A good skeleton has the same shape** as what it replaces (grid, image, title line), so nothing jumps when the real cards arrive. `Skeleton` is a shadcn component: a grey box with `animate-pulse`.
-- **Why the `key`?** A boundary shows its fallback only the *first* time. Without the `key`, changing a filter would keep the **old** results on screen until the new ones are ready, with no sign of loading. A `key` that changes with the filters says "new boundary", so the skeleton shows on every search, filter and page change.
-- `getFilterOptions()` is awaited **outside** the boundary, so the page shell still waits for that one small query.
-
----
-
-# Part 6 — The dashboard
-
-`/dashboard` lists the organizer's events, newest first, with a status badge. Its **New event** button opens the form from Part 1, and after saving you land back here, with the new draft on top.
-
-- It's in the **(dashboard)** group, so it gets the **sidebar** layout. The site header has a "For organizers" link to it.
-- **`buttonVariants()`** gives a `<Link>` the look of a button. "New event" *navigates*, so it must be a link, not a `<button>`.
-- Only **published** events link to their public page. A draft's `/events/<slug>` would be a 404.
-- `getOrganizerEvents` is **not** limited to published events (an organizer must see drafts), and it selects only the columns the list needs.
-
-What is still a **placeholder**:
-
-| Placeholder                                         | What it will become                                                      |
-| --------------------------------------------------- | ------------------------------------------------------------------------ |
-| "Signed in as JohnDoe"                              | The real signed-in organizer                                             |
-| `getOrganizerEvents('')` returns **everyone's** events | Only the signed-in organizer's own events (the `where` is commented out) |
-| `<form action="">` around Publish / Unpublish       | A **second Server Action** that changes the event's status (exercise 6)  |
-| `db/demo-users.ts`                                  | Deleted: every action reads the real session instead                     |
-
-> 🔒 **Rule for later:** a dashboard query must **always** be limited to the current user. Returning all rows "for now" is fine on a laptop and a serious data leak in production.
+- **`users` is gone**; `user` replaces it, with `role`, `handle` and the ban fields added.
+- **`session`** (one row per signed-in browser) and **`account`** (how each user signs in) are new.
+- **Deleting a user** deletes their sessions and accounts (`cascade`), but **not** their events or orders (those have no `cascade`: you can't delete a user who has events or orders, which protects history).
+- **The seed** (`db/seed.ts`) wipes everything and inserts `user` rows directly: 3 fixed organizers, a demo attendee, and random attendees. It creates **no `account` rows**, so no seeded user can sign in. They exist to own events and orders.
+- **`organizerId` and `userId` are `text`** now, because that's what Better Auth's ids are.
 
 ---
 
 ## Known issues in this snapshot
 
-Run `npm run check` and `npm run build` and you'll meet these. Fix them, in this order:
+You'll meet these when you run `npm run check` or try the app. Each is on purpose a good exercise:
 
-| Problem                                                                 | Why / how to fix                                                                                  |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `npm run db:seed` fails: `Module not found: Can't resolve '@/node_modules/@types/pg'` (`db/seed.ts`) | An editor auto-import picked a path inside `node_modules/@types`, which only has type definitions. Use `import { Pool } from 'pg';`. (`db/index.ts` already has it right) |
-| The create-event form throws `Demo user "avenga" not found`             | `db/demo-users.ts` needs users with the handles `avenga` and `demo-attendee`, and the seed makes random ones. Insert the two rows from [Run it](#-run-it), or add them to `db/seed.ts` |
-| Two files for the home page: `app/page.tsx` **and** an **empty** `app/(marketing)/page.tsx` | One URL can't have two pages, and an empty file isn't a valid page (`tsc`: "is not a module"). Move the hero from `app/page.tsx` into `app/(marketing)/page.tsx` and delete `app/page.tsx`, so `/` gets the header and footer too |
-| `npm run lint`: `'quantity' is assigned a value but never used` (`app/actions/events.ts`) | The form collects a ticket quantity, but the action doesn't save it yet. Use it (create a `ticket_types` row in the same transaction, exercise 5), or drop it from the destructuring |
-| `npm run lint`: `'eq' is defined but never used`, `'organizerId' is defined but never used` (`db/queries/dashboard.ts`) | They belong to the commented-out `where`. Prefix the argument with `_` and remove the `eq` import until sign-in exists |
-| `npm run typecheck` fails in `mocks/mock-events.ts` and `types/gatherly-event.ts` | They import the old type name `Event` (now `GatherlyEvent`) and **nothing uses them**. Delete the `mocks/` folder and `types/gatherly-event.ts` |
-| The venue label doesn't focus its select; the select may jump back after an error | See the [gotchas table](#17-gotchas-in-this-form-found-while-reading-it) (`htmlFor` and `key`)       |
-| Nit: `db/queries/dashboard.ts` has no `import 'server-only'` and imports `db` from `'..'` | Add `import 'server-only';` like `db/queries/events.ts`                                          |
-| Inter isn't actually applied (`app/layout.tsx`)                         | `font-sans` reads `--font-sans`, but the layout defines `--font-inter`. Set `--font-sans: var(--font-inter)` in `globals.css` |
+| Problem                                                                          | Why / how to fix                                                                                  |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `npm run typecheck`: `db/demo-users.ts` has no exported member `users`           | The old `users` table is gone. The file is **obsolete**: delete it once the actions use the session (next row) |
+| **`createEvent` still uses `getDemoOrganizer()`** (the form fails with "Demo user ... not found") | Replace it with `const organizer = await requireOrganizer('/dashboard/events/new')`, and use `organizer.id` as `organizerId` |
+| `/dashboard/events/new` **page** has no guard                                    | Add `await requireOrganizer('/dashboard/events/new')` at the top. A signed-in attendee can open it now |
+| **`getOrganizerEvents` ignores the owner**: every organizer sees everyone's events | Restore the commented-out `where: eq(events.organizerId, organizerId)`, and remove the unused-variable lint errors |
+| `/sign-in` shows "Create an account" and the function is named `SingInPage`      | The page passes `mode="sign-up"`. Change it to `"sign-in"` and fix the typo                       |
+| No email/password form, although `emailAndPassword` is on                        | `AuthForm` only has the GitHub button. Build the fields with `signIn.email` and `signUp.email` (exercise 6) |
+| The dashboard says "Signed in as JohnDoe"                                        | Hard-coded. Print `organizer.name`                                                                |
+| `safeNext` lets `/\evil.example` through                                         | Also reject any value containing a backslash                                                      |
+| `getCurrentUser()` queries the database on every call                            | In one request it may be called several times. Wrap it in React's `cache()` to share the result   |
+| Two files claim the home page: `app/page.tsx` and an empty `app/(marketing)/page.tsx` | One URL can't have two pages. Move the hero into `(marketing)/page.tsx` and delete `app/page.tsx` |
+| `npm run typecheck` fails in `mocks/` and `types/gatherly-event.ts`              | Unused leftovers importing types that no longer exist (`Event`, `User`). Delete them              |
+| Lint: `'quantity' ... never used`, `'eq'` and `'organizerId'` never used         | The first belongs to the unfinished ticket types, the other two to the owner `where` above        |
 
 ---
 
 ## 🏋️ Try it yourself
 
-1. **Create an event.** Open `/dashboard/events/new`, fill the form and submit. Then look at the `events` and `event_categories` tables in Drizzle Studio (`npm run db:studio`). Where is your event? How many rows were created in the join table? What is its status?
-2. **Break the validation from the browser.** Submit the form empty. Then, in DevTools, delete the `min` attribute from the price field, type `-5` and submit. Which message do you get, and *who* produced it? Why is that the important part?
-3. **Look at the network.** Open the Network tab and submit with an error, then with valid data. Find the POST request. What does the response contain? Why does a successful submit end with a redirect?
-4. **No JavaScript.** Disable JavaScript in DevTools, reload and submit the form. Does it still work? Which of the two hooks (`useActionState`, `useFormStatus`) do you lose, and what does the user still get?
-5. **Use the `quantity`.** In the same transaction that creates the event, also insert a `ticket_types` row (a name like "Standard", `priceCents`, `quantity`). Check it in Studio. This also removes the lint error.
-6. **Wire Publish / Unpublish.** Write a second Server Action `setEventStatus(eventId, formData)`. Hint: pass the event id with `action={setEventStatus.bind(null, event.id)}`. Remember the checklist: the id comes from the browser, so validate it, and make sure the event belongs to the organizer in the `WHERE` of the update. Then `revalidatePath('/dashboard')`.
-7. **Add a field.** Add an optional `website` field to the form (`z.url()`, or empty). Does your schema accept an empty string? (Hint: `""` is not a valid URL.) Does it need a migration?
-8. **Harden the action.** Make an invalid **category id** produce a friendly message instead of a crash (look at how `venueId` is checked). Then handle the **unique slug race** by catching the database's duplicate error and retrying.
-9. **Fix the form's small bugs:** the venue label (`htmlFor`), the `<select>` that resets (`key`), and add `aria-describedby` so each input points to its error.
-10. **Think.** Why does `createEvent` take `organizer` from `getDemoOrganizer()` and not from a hidden `<input name="organizerId">`? What could someone do if it did?
+1. **Create your own GitHub OAuth app** ([Part 2](#part-2--getting-the-github-credentials-step-by-step)), sign in, and look at the new rows in `user`, `account` and `session`. What is in `account.provider_id`? What is in `session.token`?
+2. **Promote and demote yourself.** Become an organizer with the SQL, open `/dashboard`, then set the role back to `attendee`. Where do you land, and which file sends you there?
+3. **Forge a cookie.** Sign out. In DevTools → Application → Cookies, create a cookie named `better-auth.session_token` with the value `abc`, and open `/dashboard`. Does the proxy let you in? Does the page? Which line stopped you, and what does this teach you about the proxy?
+4. **Guard the form.** Add `requireOrganizer(...)` to the top of `dashboard/events/new/page.tsx` **and** replace `getDemoOrganizer()` in `createEvent`. Use `organizer.id` as the event's owner. Then delete `db/demo-users.ts`.
+5. **Fix the leak.** Restore the `where` in `getOrganizerEvents`. Test it: in `psql`, change one event's `organizer_id` to another user's id, and check it disappears from your dashboard.
+6. **Build the email/password form.** Add fields to `AuthForm`: sign-up (name, email, password) and sign-in (email, password). Use `signUp.email` and `signIn.email`. Show errors in plain language, show a pending state, and **don't** reveal whether an email exists.
+7. **Fix the sign-in page** (`mode`, the typo), and show `organizer.name` on the dashboard.
+8. **Close the open-redirect hole.** Test `/sign-in?next=/\evil.example`. Make `safeNext` reject it.
+9. **Write the Publish / Unpublish action.** A Server Action `setEventStatus(eventId, formData)`. Use the ownership pattern from 4.2: the owner is in the `WHERE`. What happens if a different organizer sends your event id?
+10. **Inspect the cookie.** In DevTools find the session cookie. Is it `HttpOnly`? Try `document.cookie` in the console. Why can't you see the token? What would an attacker with a script on your page get?
+11. **Think.** Why does `parseRole()` return `attendee` for unknown values instead of throwing an error? Why is `role` not a field the sign-up form can send?
 
 ---
 
 ## 🔗 Useful links
 
-**Forms and Server Actions**
+**Better Auth**
 
-- [Next.js: Forms](https://nextjs.org/docs/app/guides/forms) — validation, `useActionState`, `useFormStatus`, pending states
-- [Next.js: Mutating data (Server Functions)](https://nextjs.org/docs/app/getting-started/mutating-data) and [`'use server'`](https://nextjs.org/docs/app/api-reference/directives/use-server)
-- [Next.js: Data security](https://nextjs.org/docs/app/guides/data-security) — why Server Actions must check authentication and authorization
-- [`revalidatePath`](https://nextjs.org/docs/app/api-reference/functions/revalidatePath) and [`redirect`](https://nextjs.org/docs/app/api-reference/functions/redirect)
-- React: [`useActionState`](https://react.dev/reference/react/useActionState), [`useFormStatus`](https://react.dev/reference/react-dom/hooks/useFormStatus) and [`<form>`](https://react.dev/reference/react-dom/components/form)
-- [Zod: error formatting (`flattenError`)](https://zod.dev/error-formatting) and [defining schemas (`coerce`, `refine`)](https://zod.dev/api)
-- [Input validation cheat sheet (OWASP)](https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html)
+- [Installation](https://www.better-auth.com/docs/installation) and [Next.js integration](https://www.better-auth.com/docs/integrations/next) (route handler, `nextCookies`, `proxy.ts`)
+- [GitHub provider](https://www.better-auth.com/docs/authentication/github) and [Email & password](https://www.better-auth.com/docs/authentication/email-password)
+- [Drizzle adapter](https://www.better-auth.com/docs/adapters/drizzle), [Database schema](https://www.better-auth.com/docs/concepts/database) and [Session management](https://www.better-auth.com/docs/concepts/session-management)
+- [Admin plugin](https://www.better-auth.com/docs/plugins/admin) (roles, banning, impersonation)
 
-**HTML and accessibility**
+**GitHub**
 
-- MDN: [`<form>` and sending data](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Forms/Sending_and_retrieving_form_data), [`FormData`](https://developer.mozilla.org/en-US/docs/Web/API/FormData), [`<label>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/label), [`<fieldset>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/fieldset) and [`datetime-local`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/datetime-local)
-- [`aria-describedby`](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-describedby) and [`aria-busy`](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-busy)
+- [Creating an OAuth app](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) and [your developer settings](https://github.com/settings/developers)
 
-**Next.js: routing and streaming**
+**Next.js**
 
-- [Route groups](https://nextjs.org/docs/app/api-reference/file-conventions/route-groups) and [project organization (private folders)](https://nextjs.org/docs/app/getting-started/project-structure)
-- [`<Form>` (`next/form`)](https://nextjs.org/docs/app/api-reference/components/form)
-- [Streaming](https://nextjs.org/docs/app/guides/streaming) and [`loading.js`](https://nextjs.org/docs/app/api-reference/file-conventions/loading)
-- [Learn Next.js: search and pagination](https://nextjs.org/learn/dashboard-app/adding-search-and-pagination) and [mutating data](https://nextjs.org/learn/dashboard-app/mutating-data)
+- [Authentication guide](https://nextjs.org/docs/app/guides/authentication), [`proxy.ts`](https://nextjs.org/docs/app/api-reference/file-conventions/proxy) and [Data security](https://nextjs.org/docs/app/guides/data-security)
+- [Route Handlers (`route.ts`)](https://nextjs.org/docs/app/api-reference/file-conventions/route) and [`cookies()`](https://nextjs.org/docs/app/api-reference/functions/cookies)
 
-**Drizzle**
+**Concepts and security**
 
-- [Transactions](https://orm.drizzle.team/docs/transactions) and [insert with `returning`](https://orm.drizzle.team/docs/insert)
-- [Filter operators (`and`, `eq`, `gte`, `ilike`, `inArray`)](https://orm.drizzle.team/docs/operators), [Select (limit, offset, distinct, `$count`)](https://orm.drizzle.team/docs/select) and [relational queries](https://orm.drizzle.team/docs/rqb)
+- [OAuth 2.0 simplified](https://www.oauth.com/) and [HTTP cookies](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies) (MDN)
+- MDN: [401 Unauthorized](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401) and [403 Forbidden](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403)
+- OWASP: [Broken access control](https://owasp.org/Top10/A01_2021-Broken_Access_Control/), [Authentication cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html), [Session management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html) and [Unvalidated redirects](https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html)
 
 **Previous classes**
 
-- [Class 04 README](../class_04_routing/README.md): the seed script, queries layer, dynamic route and search
-- [Class 03 README](../class_03_db/README.md): PostgreSQL and Drizzle setup, migrations
-- [Class 02 README](../class_02_essentials/README.md): Server vs Client Components, Suspense, shadcn/ui
+- [Class 06 README](../class_06_forms/README.md): forms and Server Actions (the checklist for every action)
+- [Class 03 README](../class_03_db/README.md): PostgreSQL, Drizzle and migrations
