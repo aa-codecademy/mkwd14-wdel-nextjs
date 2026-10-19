@@ -227,7 +227,7 @@ In-class examples and exercises are organized by session (e.g. `class_01_intro/`
 | [02 — Essentials](./class_02_essentials) | Where code runs, streaming with Suspense, error.tsx / not-found.tsx, Gatherly layout, mock data and event grid |
 | [03 — Database](./class_03_db) | PostgreSQL (install on Mac/Windows or Docker), Drizzle ORM schema, migrations, connection string |
 | [04 — Routing & Search](./class_04_routing) | Seeding with faker, queries layer, dynamic route `[slug]`, nested layout, search params (URL as state), Zod |
-| [06 — Dashboard & Streaming](./class_06_forms) | Route groups, private folders, filters and pagination in the URL, Suspense + skeleton, the organizer dashboard (forms next) |
+| [06 — Forms & Server Actions](./class_06_forms) | Forms, Server Actions (`useActionState`, `useFormStatus`, Zod validation, redirect/revalidate), ticketing tables, route groups, filters and pagination, Suspense + skeleton, the organizer dashboard |
 
 To run any of them:
 

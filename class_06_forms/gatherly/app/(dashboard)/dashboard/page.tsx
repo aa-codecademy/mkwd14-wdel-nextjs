@@ -6,18 +6,19 @@
  *
  * What is real and what is a placeholder in this version:
  *   ✅ the list of events, newest first, with a status badge (draft / published / cancelled)
+ *   ✅ "New event" opens /dashboard/events/new, a real form handled by a Server Action
+ *      (see app/actions/events.ts). After it succeeds you land back here and the new draft is
+ *      at the top. That's what `revalidatePath('/dashboard')` + `redirect('/dashboard')` do.
  *   🚧 "Signed in as JohnDoe" is hard-coded text. There is no sign-in yet.
  *   🚧 getOrganizerEvents('') receives an empty id and returns ALL events (see the query file).
  *   🚧 <form action=""> around the Publish/Unpublish button: a form whose action does nothing
- *      yet. It marks where a form action (a Server Action that updates the event's status)
- *      will plug in. Clicking it just reloads the page.
- *   🚧 "New event" links to /dashboard/events/new, a page that doesn't exist yet, so it shows
- *      a 404 for now (an empty `events/` folder is waiting for it).
+ *      yet. It marks where a SECOND Server Action (one that changes an event's status) plugs in.
+ *      Clicking it just reloads the page.
  *
  * Rendering note: this page uses nothing from the request (no cookies, headers or search
  * params), so `next build` could prerender it ONCE with the data of that moment. `npm run dev`
  * always renders fresh. A real dashboard reads the signed-in user (cookies), which makes it
- * dynamic automatically.
+ * dynamic automatically. This is also why the create action calls `revalidatePath`.
  */
 import Link from 'next/link';
 // `buttonVariants` gives a <Link> the LOOK of a button (see components/ui/button.tsx):

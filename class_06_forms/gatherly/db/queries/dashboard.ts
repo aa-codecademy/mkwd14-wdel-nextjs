@@ -9,6 +9,7 @@
  * organizer is commented out until authentication exists. Never ship a version like this:
  * a real dashboard must only return the signed-in organizer's own events.
  */
+// Heads-up: `eq` isn't used yet (it belongs to the commented-out `where` below), and ESLint reports it.
 import { desc, eq, asc } from 'drizzle-orm';
 import { db } from '..';
 import { categories, events, venues } from '../schema';
@@ -25,6 +26,9 @@ export async function getOrganizerEvents(organizerId: string) {
   });
 }
 
+// What the "New event" form needs: every venue and category, to build the <select> and the
+// checkboxes. Only the columns the form uses (id to submit, name to show, city for the label).
+// The two queries don't depend on each other, so they run in parallel with Promise.all.
 export async function getEventFormOptions() {
   const [venueRows, categoryRows] = await Promise.all([
     db
@@ -34,6 +38,7 @@ export async function getEventFormOptions() {
         city: venues.city,
       })
       .from(venues)
+      // Alphabetical, so the dropdown is easy to scan.
       .orderBy(asc(venues.name)),
     db
       .select({

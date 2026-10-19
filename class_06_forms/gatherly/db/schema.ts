@@ -33,6 +33,9 @@ import {
 // rejects anything else. Heads-up: the spelling here is 'cancelled' (two l's), while the
 // older types/event-status.ts used 'canceled'. The database spelling is the one that counts.
 export const eventStatus = pgEnum('event_status', ['draft', 'published', 'cancelled']);
+// The lifecycle of an ORDER. Heads-up on spelling: events use 'cancelled' (two l's) but orders use
+// 'canceled' (one l). Both are valid English, and mixing them is an easy typo trap, so copy them
+// exactly when you write code that compares or inserts these values.
 export const orderStatus = pgEnum('order_status', ['pending', 'paid', 'refunded', 'canceled']);
 
 // pgTable('table_name', { columns }) declares one table.
@@ -119,16 +122,31 @@ export const eventCategories = pgTable(
   (table) => [primaryKey({ columns: [table.eventId, table.categoryId] })],
 );
 
+// ───────────────────────── TICKETING (the groundwork for reserving tickets) ─────────────────────────
+// An event sells one or more KINDS of ticket (e.g. "Standard", "VIP"). When someone buys, we create an
+// ORDER (who bought, for which event, how much), and one TICKET row per seat in that order:
+//
+//   events ──< ticket_types          what you can buy, its price and how many exist
+//   users  ──< orders >── events     one purchase by one user for one event
+//   orders ──< tickets >── ticket_types   the individual tickets, each with its own code
+//
+// The migration drizzle/0003_*.sql creates these three tables (+ the order_status type). Nothing
+// reads or writes them yet. The "New event" form even collects a ticket quantity that isn't saved.
+// They're here so the next features (reserving tickets, the QR-code check-in) have somewhere to go.
 export const ticketTypes = pgTable('ticket_types', {
   id: uuid().primaryKey().defaultRandom(),
   eventId: uuid()
     .notNull()
     .references(() => events.id, { onDelete: 'cascade' }),
   name: varchar().notNull(),
+  // Whole cents, like events.minPriceCents.
   priceCents: integer().notNull(),
+  // How many tickets of this type exist in total.
   quantity: integer().notNull(),
 });
 
+// One purchase. Note the foreign keys have no `onDelete` rule (default = no action): you can't delete
+// a user or an event that has orders. That protects the sales history.
 export const orders = pgTable('orders', {
   id: uuid().primaryKey().defaultRandom(),
   userId: uuid()
@@ -138,10 +156,13 @@ export const orders = pgTable('orders', {
     .notNull()
     .references(() => events.id),
   status: orderStatus().notNull().default('pending'),
+  // The order's total in cents. (A naming nit: elsewhere we say `...Cents`, plural.)
   totalCent: integer().notNull(),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
 
+// One ticket = one admission. `onDelete: 'cascade'` on orderId: if an order is deleted, its tickets go
+// with it. Deleting a ticket TYPE that has tickets is blocked (no action).
 export const tickets = pgTable('tickets', {
   id: uuid().primaryKey().defaultRandom(),
   orderId: uuid()
@@ -150,6 +171,7 @@ export const tickets = pgTable('tickets', {
   ticketTypeId: uuid()
     .notNull()
     .references(() => ticketTypes.id),
+  // The value the QR code will carry. UNIQUE, so no two tickets can ever have the same code.
   code: text().notNull().unique(),
   attendeeName: text().notNull(),
 });
@@ -171,6 +193,7 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   venue: one(venues, { fields: [events.venueId], references: [venues.id] }),
   organizer: one(users, { fields: [events.organizerId], references: [users.id] }),
   eventCategories: many(eventCategories),
+  // New: an event has many ticket types, so `with: { ticketTypes: true }` works in queries.
   ticketTypes: many(ticketTypes),
 }));
 
@@ -219,5 +242,7 @@ export type TicketType = typeof ticketTypes.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Ticket = typeof tickets.$inferSelect;
 
+// `enumValues` is the array of an enum's values; indexing it with [number] gives their UNION:
+// 'draft' | 'published' | 'cancelled'. So the type follows the enum automatically.
 export type EventStatus = (typeof eventStatus.enumValues)[number];
 export type OrderStatus = (typeof orderStatus.enumValues)[number];

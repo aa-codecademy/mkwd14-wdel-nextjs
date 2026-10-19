@@ -5,10 +5,11 @@ Each homework has its own file here, added after the class it belongs to (`hmw_1
 | Homework                            | Topic                                              | After class |
 | ----------------------------------- | -------------------------------------------------- | ----------- |
 | [Homework 1](./hmw_1.md)            | 🎲 A Wordle-style word game (a standalone project)  | 4           |
+| [Homework 2](./hmw_2.md)            | 🎲 Word game, part 2: forms and Server Actions (continues homework 1) | 6 |
 
 ## How to submit
 
-1. Create **your own GitHub repository** for the homework and work there. Unless a homework says otherwise, it's a **separate project**, not part of the course repository or the Gatherly app.
+1. Create **your own GitHub repository** for the homework and work there. Unless a homework says otherwise, it's a **separate project**, not part of the course repository or the Gatherly app. (Homework 2 continues homework 1, in the same repository.)
 2. Before you push, make sure these pass with no errors:
 
    ```bash

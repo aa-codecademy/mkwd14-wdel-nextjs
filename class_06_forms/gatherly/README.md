@@ -1,8 +1,8 @@
-# Gatherly — class 06 snapshot
+# Gatherly — class 06 snapshot: forms and Server Actions
 
-The course application at the start of class 6: the public site and an **organizer dashboard** live in separate **route groups**, `/events` has **filters, sorting and pagination** that **stream in with a skeleton**, and the dashboard lists the organizer's events. Forms and sign-in are still to come: the dashboard has placeholders where they plug in.
+The course application in class 6: organizers can now **create events** with a validated **form** handled by a **Server Action**. The public site and the **organizer dashboard** live in separate **route groups**, `/events` has **filters, sorting and pagination** that **stream in with a skeleton**, and the database has the groundwork for **ticketing** (ticket types, orders, tickets). Sign-in is still to come: a seeded "demo organizer" acts for now.
 
-> 📘 **What's new and why?** The concepts, step-by-step run instructions, known issues, exercises and links are in the **[class 06 README](../README.md)**. The seed script, queries layer and dynamic route are explained in the **[class 04 README](../../class_04_routing/README.md)**, and PostgreSQL setup in the **[class 03 README](../../class_03_db/README.md)**.
+> 📘 **What's new and why?** The full explanation (forms and Server Actions step by step, route groups, filters, streaming), run instructions, known issues, exercises and links are in the **[class 06 README](../README.md)**. The seed script, queries layer and dynamic route are explained in the **[class 04 README](../../class_04_routing/README.md)**, and PostgreSQL setup in the **[class 03 README](../../class_03_db/README.md)**.
 
 | Route                                                 | File                                              | Data source                         |
 | ----------------------------------------------------- | ------------------------------------------------- | ----------------------------------- |
@@ -11,8 +11,9 @@ The course application at the start of class 6: the public site and an **organiz
 | [/events](http://localhost:3000/events)               | `app/(marketing)/events/page.tsx`                 | database (`searchEvents`), URL filters, streamed with Suspense |
 | `/events/[slug]`                                      | `app/(marketing)/events/[slug]/page.tsx`          | database (`getEventBySlug`)         |
 | [/dashboard](http://localhost:3000/dashboard)         | `app/(dashboard)/dashboard/page.tsx`              | database (`getOrganizerEvents`, all events for now) |
+| [/dashboard/events/new](http://localhost:3000/dashboard/events/new) | `app/(dashboard)/dashboard/events/new/page.tsx` | **the new-event form** → Server Action `createEvent` |
 
-> ⚠️ This snapshot doesn't build yet: a wrong `pg` import in `db/index.ts` and `db/seed.ts`, and two files for the home page. Both are listed with their fixes in the *Known issues* of the [class 06 README](../README.md).
+> ⚠️ Before the form works: `npm run db:seed` has a wrong `pg` import, the seed doesn't create the demo users the form acts as, and two files claim the home page. Each one is listed with its fix in the *Known issues* of the [class 06 README](../README.md).
 
 ## 🚀 Quick start
 
@@ -21,7 +22,7 @@ You need a running PostgreSQL server with a `gatherly` database ([class 03, Step
 ```bash
 cp .env.example .env     # then check DATABASE_URL (Windows PowerShell: Copy-Item .env.example .env)
 npm install
-npm run db:migrate       # creates the tables
+npm run db:migrate       # creates the tables (class 6 adds orders, tickets, ticket_types)
 npm run db:seed          # fills them with fake data (run it once)
 npm run dev
 ```
@@ -66,17 +67,23 @@ gatherly/
 │       ├── layout.tsx          ← sidebar
 │       └── dashboard/
 │           ├── page.tsx        ← "/dashboard": the organizer's events (Publish/Unpublish form is a placeholder)
-│           └── events/         ← empty for now: "New event" will live here
+│           └── events/new/     ← NEW: the create-event form
+│               ├── page.tsx    ← server: loads venues + categories
+│               └── _components/   ← new-event-form (client, useActionState), field, field-errors
+├── actions/
+│   └── events.ts               ← NEW: Server Action `createEvent` (validate with Zod, save, revalidate, redirect)
 ├── components/
 │   ├── event-cover.tsx         ← cover image with a placeholder when there is none
-│   ├── event-grid-skeleton.tsx ← NEW: loading placeholder shown by <Suspense>
+│   ├── event-grid-skeleton.tsx ← loading placeholder shown by <Suspense>
+│   ├── submit-button.tsx       ← NEW: a submit button that disables itself while saving (useFormStatus)
 │   ├── event-grid.tsx, event-card.tsx, favourite-button.tsx, header.tsx, footer.tsx
 │   └── ui/                     ← shadcn/ui: button, card, badge, input, skeleton (NEW)
 ├── db/
 │   ├── schema.ts               ← the tables, relations and inferred types
 │   ├── index.ts                ← the `db` client (server-only)
 │   ├── queries/events.ts       ← searchEvents (filters + pagination), getEventBySlug, getFilterOptions
-│   ├── queries/dashboard.ts    ← NEW: getOrganizerEvents (not limited to one organizer yet)
+│   ├── queries/dashboard.ts    ← getOrganizerEvents (not limited to one organizer yet), getEventFormOptions (NEW)
+│   ├── demo-users.ts           ← NEW: the "pretend login" (organizer `avenga`, attendee `demo-attendee`)
 │   └── seed.ts                 ← the seed script (faker)
 ├── lib/
 │   ├── event-filters.ts        ← validates the URL params with Zod (+ `eventsHref` builds URLs)
