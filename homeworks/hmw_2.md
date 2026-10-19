@@ -10,12 +10,7 @@ This is the same kind of homework as the first one. It describes **what** the ap
 
 ## 🧱 Starting point
 
-You continue **in your own project from homework 1**, the same repository. Homework 1 has to work first: puzzles in the database, the 6 × 5 board, the validation, the colours.
-
-Before you start, keep homework 1 safe so both can be reviewed:
-
-1. Make sure everything for homework 1 is committed and pushed, and **tag** it (for example `homework-1`).
-2. Do the new work on a **branch** (for example `homework-2`). Don't delete or rewrite homework 1.
+You continue with **your project from homework 1**. It has to work first: puzzles in the database, the 6 × 5 board, the validation, the colours.
 
 ---
 
@@ -81,7 +76,7 @@ When you answered the reflection question of homework 1 ("can you find the answe
 - No leftover debug output (`console.log`), and no unused code.
 - **No secrets are committed.** `.env` is not in the repository, and `.env.example` is.
 - Your README's **"How to run the game"** is updated: the new migration(s), the seed, and how to open the admin area. Someone with a fresh database can still get everything running from your repository alone.
-- Your **git history** tells a story: small commits with meaningful messages (at least 8 for this homework), on your `homework-2` branch.
+- Your **git history** tells a story: small commits with meaningful messages (at least 8 for this homework).
 - You can **explain every line** you hand in, including parts an AI assistant helped with.
 
 ---
@@ -128,8 +123,8 @@ Create a file `HOMEWORK_2.md` in the root of your repo and answer these in **2�
 
 ## 📬 How to submit
 
-1. Push your work to **the same GitHub repository as homework 1**, on your `homework-2` branch (and keep the `homework-1` tag).
-2. Email the **link to the repository and the name of the branch** to **[ivo@kostovski.dev](mailto:ivo@kostovski.dev)** and write in the message that homework 2 is **done**. If the repository is private and you already invited me for homework 1, there's nothing more to do. Otherwise invite me as a collaborator (*Settings → Collaborators → Add people*) using the email **ivo.kostovski@gmail.com**.
+1. Push your work to your GitHub repository.
+2. Email the **link to the repository** to **[ivo@kostovski.dev](mailto:ivo@kostovski.dev)** and write in the message that homework 2 is **done**. If the repository is private and you already invited me for homework 1, there's nothing more to do. Otherwise invite me as a collaborator (*Settings → Collaborators → Add people*) using the email **ivo.kostovski@gmail.com**.
 3. Make sure `HOMEWORK_2.md` (the reflection) and the updated "How to run the game" section are in the repo.
 
 ---
