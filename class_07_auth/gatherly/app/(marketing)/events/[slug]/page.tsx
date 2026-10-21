@@ -103,7 +103,16 @@ export default async function EventPage({ params }: PageProps<'/events/[slug]'>)
 
       <p className="mt-6 max-w-prose text-lg">{event.description}</p>
 
-      <YourTickets eventId={event.id} />
+      <a
+        href={`/api/events/${event.slug}/calendar.ics`}
+        className="mt-4 inline-block text-sm text-brand-500 hover:underline"
+      >
+        Add to calendar (.ics)
+      </a>
+
+      <Suspense fallback={null}>
+        <YourTickets eventId={event.id} />
+      </Suspense>
 
       <Suspense fallback={<TicketListSkeleton />}>
         <TicketsList eventId={event.id} />
