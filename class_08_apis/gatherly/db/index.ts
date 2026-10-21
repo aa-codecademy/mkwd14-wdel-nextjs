@@ -14,7 +14,7 @@ import 'server-only';
 import * as appSchema from './schema';
 import * as authSchema from './auth-schema';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from '@/node_modules/@types/pg';
+import { Pool } from 'pg';
 
 const schema = { ...appSchema, ...authSchema };
 

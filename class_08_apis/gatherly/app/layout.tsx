@@ -17,13 +17,11 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 
-// `variable` exposes the font as a CSS variable (--font-inter) on <html>, see below.
-// Heads-up: Tailwind's `font-sans` class reads `--font-sans` (globals.css: `--font-sans: var(--font-sans)`,
-// written by shadcn), NOT `--font-inter`. Since the Geist font that defined `--font-sans` was
-// removed from this file, no font is wired to `font-sans` anymore and the browser falls back to
-// its own default font. To really use Inter: in globals.css set
-// `--font-sans: var(--font-inter)`.
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+// `variable` exposes the font as a CSS variable (--font-sans) on <html>, see below.
+// The name matters: Tailwind's `font-sans` class reads `--font-sans` (globals.css:
+// `--font-sans: var(--font-sans)`, written by shadcn). With any other name (e.g. `--font-inter`)
+// nothing would read it and the browser would fall back to its own default (serif) font.
+const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 // Default <title> and <meta name="description"> for every page.
 // A page can export its own `metadata` to override them.
@@ -34,7 +32,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    // The font variable goes on <html> so `var(--font-inter)` can be resolved anywhere below it.
+    // The font variable goes on <html> so `var(--font-sans)` can be resolved anywhere below it.
     <html lang="en" className={inter.variable}>
       {/* `min-h-screen`: at least the height of the window. `antialiased`: smoother text rendering. */}
       <body className="min-h-screen antialiased">{children}</body>
