@@ -5,6 +5,7 @@ import { getCurrentUser } from '../../lib/session';
 import { db } from '../../db';
 import { events, orders, tickets, ticketTypes } from '../../db/schema';
 import { eq, count, and, ne } from 'drizzle-orm';
+import { revalidatePath } from 'next/cache';
 
 type ReservedResult =
   | {
@@ -51,7 +52,7 @@ export async function reserveTicket(ticketTypeId: string): Promise<ReservedResul
       .where(and(eq(tickets.ticketTypeId, type.id), ne(orders.status, 'canceled')));
 
     if ((sold?.n ?? 0) >= type.quantity) {
-      return { ok: false, error: `Sold out` };
+      return { ok: false, error: `Sold out`, slug: event.slug };
     }
 
     const [order] = await tx
@@ -74,8 +75,11 @@ export async function reserveTicket(ticketTypeId: string): Promise<ReservedResul
       attendeeName: attendee.name,
     });
 
-    return { ok: true };
+    return { ok: true, slug: event.slug };
   });
 
+  if ('slug' in result) {
+    revalidatePath(`/events/${result.slug}`);
+  }
   return result.ok ? { ok: true } : { ok: false, error: result.error ?? '' };
 }

@@ -1,4 +1,4 @@
-import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, count, eq, ne, sql } from 'drizzle-orm';
 import { db } from '..';
 import { orders, tickets, ticketTypes } from '../schema';
 
@@ -20,4 +20,16 @@ export async function getTicketsAvailability(eventId: string) {
     .orderBy(asc(ticketTypes.priceCents));
 
   return rows.map((row) => ({ ...row, remaining: Math.max(0, row.quantity - row.sold) }));
+}
+
+export async function getUserTicketsCount(eventId: string, userId: string) {
+  const [row] = await db
+    .select({ n: count() })
+    .from(tickets)
+    .innerJoin(orders, eq(orders.id, tickets.orderId))
+    .where(
+      and(eq(orders.eventId, eventId), eq(orders.userId, userId), ne(orders.status, 'canceled')),
+    );
+
+  return row?.n ?? 0;
 }

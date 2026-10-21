@@ -26,6 +26,9 @@ import { formatEventDate, formatPrice } from '../../../../lib/format';
 // A small component that handles events WITHOUT a cover image. See components/event-cover.tsx.
 import { EventCover } from '../../../../components/event-cover';
 import { TicketsList } from './_components/tickets-list';
+import { Suspense } from 'react';
+import { TicketListSkeleton } from './_components/ticket-list-skeleton';
+import { YourTickets } from './_components/your-tickets';
 
 // `PageProps<'/events/[slug]'>` is the global helper that types `params` for this exact route.
 export default async function EventPage({ params }: PageProps<'/events/[slug]'>) {
@@ -100,7 +103,11 @@ export default async function EventPage({ params }: PageProps<'/events/[slug]'>)
 
       <p className="mt-6 max-w-prose text-lg">{event.description}</p>
 
-      <TicketsList eventId={event.id} />
+      <YourTickets eventId={event.id} />
+
+      <Suspense fallback={<TicketListSkeleton />}>
+        <TicketsList eventId={event.id} />
+      </Suspense>
     </article>
   );
 }
