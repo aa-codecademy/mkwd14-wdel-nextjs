@@ -25,6 +25,7 @@ import { FavouriteButton } from '../../../../components/favourite-button';
 import { formatEventDate, formatPrice } from '../../../../lib/format';
 // A small component that handles events WITHOUT a cover image. See components/event-cover.tsx.
 import { EventCover } from '../../../../components/event-cover';
+import { TicketsList } from './_components/tickets-list';
 
 // `PageProps<'/events/[slug]'>` is the global helper that types `params` for this exact route.
 export default async function EventPage({ params }: PageProps<'/events/[slug]'>) {
@@ -98,6 +99,8 @@ export default async function EventPage({ params }: PageProps<'/events/[slug]'>)
       </dl>
 
       <p className="mt-6 max-w-prose text-lg">{event.description}</p>
+
+      <TicketsList eventId={event.id} />
     </article>
   );
 }

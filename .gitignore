@@ -39,3 +39,6 @@ npm-debug.log*
 coverage/
 playwright-report/
 test-results/
+
+# Student homework submissions (cloned repos, not part of this course repo)
+homeworks/submittions/
