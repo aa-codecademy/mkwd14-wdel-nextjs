@@ -16,6 +16,10 @@
  *
  * This page depends on the URL and reads the database, so Next.js renders it on the server
  * when it is requested. It's a Server Component, so none of this code is sent to the browser.
+ *
+ * New in class 7: the bottom of the page (ticket availability, "your tickets") is STREAMED. The event
+ * info above renders first, and each personal or slower block sits in its own <Suspense> and appears when
+ * its query finishes (see ./_components/). Reading the session cookie makes the page dynamic anyway.
  */
 import { notFound } from 'next/navigation';
 // Relative imports on purpose here; `@/db/queries/events` would work the same (the `@/` alias).
@@ -103,6 +107,10 @@ export default async function EventPage({ params }: PageProps<'/events/[slug]'>)
 
       <p className="mt-6 max-w-prose text-lg">{event.description}</p>
 
+      {/*
+       * A plain <a>, not <Link>: this URL is a FILE DOWNLOAD (a Route Handler returning a .ics file, see
+       * app/api/events/[slug]/calendar.ics/route.ts), not a page. <Link> is only for navigating between pages.
+       */}
       <a
         href={`/api/events/${event.slug}/calendar.ics`}
         className="mt-4 inline-block text-sm text-brand-500 hover:underline"
@@ -110,10 +118,12 @@ export default async function EventPage({ params }: PageProps<'/events/[slug]'>)
         Add to calendar (.ics)
       </a>
 
+      {/* Personal and optional: no skeleton (`fallback={null}`), it simply appears if there is something to say. */}
       <Suspense fallback={null}>
         <YourTickets eventId={event.id} />
       </Suspense>
 
+      {/* The ticket list shows a skeleton while its query runs. */}
       <Suspense fallback={<TicketListSkeleton />}>
         <TicketsList eventId={event.id} />
       </Suspense>

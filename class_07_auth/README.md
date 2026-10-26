@@ -4,10 +4,10 @@ Until now, Gatherly didn't know **who** was using it. In class 6 a fixed "demo o
 
 We use **[Better Auth](https://www.better-auth.com/)**, a library that handles sign-up, sign-in, sessions and OAuth, so we don't write security-critical code ourselves.
 
-> 🧭 **Where we are:** Better Auth is installed and connected to our database, "Continue with GitHub" works, the header shows the signed-in user, `/dashboard` is guarded by role, and the old `users` table has been replaced. Some of it is **unfinished**: the create-event form still acts as the demo organizer, the email/password form has no screen yet, and a few pages and queries still skip the checks. Each gap is listed in [Known issues](#known-issues-in-this-snapshot) and is a good exercise.
+> 🧭 **Where we are:** Better Auth is installed and connected to our database, "Continue with GitHub" works, the header shows the signed-in user, `/dashboard` is guarded by role, and the old `users` table has been replaced. On top of that, signed-in attendees can **reserve tickets** (with an optimistic button), the app has **error pages**, and each event offers an **"Add to calendar"** download (Parts 6 to 8). Some of it is **unfinished**: the create-event form still acts as the demo organizer, the email/password form has no screen yet, and a few pages and queries still skip the checks. Each gap is listed in [Known issues](#known-issues-in-this-snapshot) and is a good exercise.
 
 **On this page:**
-[Run it](#-run-it) · [Part 1: The ideas](#part-1--the-ideas-before-any-code) · [Part 2: GitHub credentials](#part-2--getting-the-github-credentials-step-by-step) · [Part 3: Implementing Better Auth](#part-3--implementing-better-auth-step-by-step) · [Part 4: Authorization in practice](#part-4--authorization-in-practice) · [Part 5: What changed in the data](#part-5--what-changed-in-the-data) · [Known issues](#known-issues-in-this-snapshot) · [Exercises](#-try-it-yourself) · [Links](#-useful-links)
+[Run it](#-run-it) · [Part 1: The ideas](#part-1--the-ideas-before-any-code) · [Part 2: GitHub credentials](#part-2--getting-the-github-credentials-step-by-step) · [Part 3: Implementing Better Auth](#part-3--implementing-better-auth-step-by-step) · [Part 4: Authorization in practice](#part-4--authorization-in-practice) · [Part 5: What changed in the data](#part-5--what-changed-in-the-data) · [Part 6: Reserving tickets](#part-6--reserving-tickets) · [Part 7: Error pages](#part-7--error-pages) · [Part 8: The calendar download](#part-8--a-file-download-the-calendar) · [Known issues](#known-issues-in-this-snapshot) · [Exercises](#-try-it-yourself) · [Links](#-useful-links)
 
 ## 📁 What's in this folder
 
@@ -524,6 +524,204 @@ users (uuid id)                              user (text id)       ◄── Bett
 
 ---
 
+# Part 6 — Reserving tickets
+
+With sign-in in place, an attendee can finally **do** something: reserve a ticket. It combines everything so far (a Server Action, authentication, a transaction, streaming) and adds two new ideas: **a lock** that prevents overselling, and an **optimistic button**.
+
+## 6.1 The pieces
+
+| File                                                                | Runs on  | Job                                                                          |
+| ------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------- |
+| `app/actions/tickets.ts`                                            | server   | **`reserveTicket`**: the Server Action that checks and creates the order     |
+| `db/queries/tickets.ts`                                             | server   | `getTicketsAvailability` (how many left) and `getUserTicketsCount` (how many you have) |
+| `.../events/[slug]/_components/tickets-list.tsx`                    | server   | The list of ticket types, with a Reserve button each                         |
+| `.../_components/reserve-button.tsx`                                | browser  | The button with the **optimistic** "N left"                                  |
+| `.../_components/your-tickets.tsx`                                  | server   | "You have 2 tickets for this event" (only if signed in and you have some)    |
+| `.../_components/ticket-list-skeleton.tsx`                          | server   | The placeholder shown while the ticket list loads                            |
+| `.../events/[slug]/page.tsx`                                        | server   | Puts the pieces on the event page, each in its own `<Suspense>`              |
+
+## 6.2 One click, step by step
+
+```
+ browser                                                            server
+ ───────                                                            ──────
+ 1. click "Reserve"
+ 2. useOptimistic: "5 left" becomes "4 left" at once                  (the screen already looks done)
+ 3. reserveTicket(ticketTypeId) ─────────────────────────────────►  4. who is it? (getCurrentUser)
+                                                                      5. is the id valid? (Zod)
+                                                                      6. START A TRANSACTION
+                                                                         lock the ticket type's row
+                                                                         is the event published?
+                                                                         count the sold tickets
+                                                                         sold out?  → return an error
+                                                                         insert the order + the ticket
+                                                                      7. COMMIT, then revalidatePath(event page)
+ 8. the answer arrives  ◄──────────────────────────────────────────  { ok: true }  or  { ok: false, error }
+ 9. success: the page data refreshes, the real number is 4 too
+    failure: the optimistic "4" is dropped, "5 left" returns, a message shows
+```
+
+## 6.3 The problem: overselling
+
+Imagine a VIP tier with **1 seat left**, and two people press Reserve **at the same millisecond**. A naive action does:
+
+```
+1. count the sold tickets        →  sold = 9, quantity = 10, so 1 left
+2. is there room?                →  yes
+3. insert the ticket
+```
+
+Both requests run step 1 **before either reaches step 3**, so **both** see "1 left", **both** insert, and we've sold 11 tickets for 10 seats. This is a **race condition**: the result depends on who is faster.
+
+### The cure: a transaction plus a row lock
+
+```ts
+const result = await db.transaction(async (tx) => {
+  const [type] = await tx.select().from(ticketTypes)
+    .where(eq(ticketTypes.id, id.data))
+    .for('update');                      // ← the lock
+  // ... count sold, check, insert ...
+});
+```
+
+`.for('update')` is SQL's `SELECT ... FOR UPDATE`: it **locks that ticket type's row** until the transaction ends. A second request that wants the same row **waits** at that line. When the first finishes (commits), the second continues, now **sees the new sold count**, and correctly answers "Sold out". Requests for **different** ticket types lock different rows, so they don't slow each other down.
+
+Remember what a transaction gives you from class 6: **all or nothing**. Here it also gives a **safe place to check and then act**, because the lock makes "check, then insert" one indivisible step.
+
+### Why count rows instead of keeping a counter?
+
+"Left" is **computed** (`quantity - sold`), never stored in a column. A stored counter has to be updated in every code path, forever (what if an order is canceled? refunded?) and sooner or later it drifts from reality. Counting the real rows can't.
+
+## 6.4 What the server decides
+
+The browser sends **only a `ticketTypeId`**. Everything else comes from the server:
+
+| Thing                | Where it comes from                              | Why not from the browser                                  |
+| -------------------- | ------------------------------------------------ | --------------------------------------------------------- |
+| **Who** is buying    | `getCurrentUser()` (the session)                 | A parameter `userId` could be changed to buy as someone else |
+| The **price**        | The ticket type's row in the database            | A browser-supplied price could be `0`                     |
+| Whether it's **for sale** | The event must be `published`               | A draft isn't on sale                                     |
+| Whether there are **seats** | The count inside the locked transaction   | The browser's "5 left" can be stale or faked              |
+
+The action **returns a result** instead of redirecting or throwing, as a discriminated union:
+
+```ts
+type ReservedResult = { ok: true } | { ok: false; error: string; signIn?: true };
+```
+
+A client component needs an **answer to react to** ("Sold out", "Sign in to reserve"). Redirecting from a button would take the user away. Throwing would trigger an error page for something that is a normal outcome. When nobody is signed in, the action returns `signIn: true` and the button shows a link to `/sign-in?next=<this page>`.
+
+## 6.5 How "N left" is computed
+
+`getTicketsAvailability` is one SQL query, and each part has a reason:
+
+| Piece                                                | Why                                                                                         |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `leftJoin(tickets, ...)` then `leftJoin(orders, ...)` | A **LEFT** join keeps ticket types with **no sales**. An inner join would drop them, and "0 sold" would vanish |
+| `ne(orders.status, 'canceled')` **in the join condition** | Canceled orders must not count. Put it in `WHERE` and the unsold types would disappear again |
+| `groupBy(ticketTypes.id)`                            | Collapse the joined rows back to one per ticket type, so `count()` counts **per type**      |
+| ``sql`count(${orders.id})`.mapWith(Number)``         | PostgreSQL's `count()` is a bigint, which node-postgres returns as a **string** (`"3"`). `mapWith(Number)` converts it |
+| `Math.max(0, quantity - sold)`                       | "Left" never goes below zero                                                                |
+
+> 🔤 **Spelling trap again:** order statuses are `'canceled'` (one l). Writing `'cancelled'` would be a type error here, which is exactly the kind of mistake TypeScript catches for you.
+
+## 6.6 The optimistic button
+
+A round trip to the server takes a moment. If "5 left" only changes **after** the answer arrives, the button feels slow. An **optimistic update** shows the expected result **immediately** and lets the real answer correct it. React 19 has hooks for exactly this:
+
+| Hook                          | What it gives you                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `useOptimistic(value, reducer)` | `[optimisticValue, addOptimistic]`: a **temporary copy** of `remaining` that applies your guess ("minus 1") while a transition runs, and **falls back to the real prop** when it ends |
+| `useTransition()`             | `[isPending, startTransition]`: wraps async work as a "transition". Optimistic values only live inside one |
+
+The click handler in `reserve-button.tsx`:
+
+```ts
+startTransition(async () => {
+  reserveOne(1);                                       // 1. show "4 left" right now
+  const result = await reserveTicket(ticketTypeId);    // 2. ask the server
+  setMessage(result.ok ? 'Reserved' : result.error);   // 3. show the outcome
+});
+```
+
+The best part is the **rollback**: if the server says no, nothing in our code undoes the "4". The transition ends, the optimistic value disappears, and the real `remaining` (still 5, because nothing was reserved) is shown again. On success, `revalidatePath` makes the server send the new real number (4), which matches what the user already saw.
+
+Small details: the button is **disabled while pending** (no double clicks), the message has `aria-live="polite"` (a screen reader announces it), and the whole thing works for the **sold-out** case too: the optimistic count reaching 0 turns the label into "Sold out".
+
+## 6.7 Streaming on the event page
+
+The event page now has three parts, and each loads at its own speed:
+
+```
+ the event info (title, date, place, description)   ← renders first, from one query
+ <Suspense fallback={null}>          <YourTickets />     ← personal: reads the session. Appears only if you have tickets
+ <Suspense fallback={<Skeleton />}>  <TicketsList />     ← 3 joins + a count. A skeleton shows while it loads
+```
+
+Because the ticket queries are slower and some parts depend on **who you are**, they sit in their own `<Suspense>` boundaries: the public information is never held back by them. (This is the streaming idea from class 2, used for real.) Reading the session cookie in `YourTickets` also means the page is rendered **per request**, which is right for a page that shows personal data.
+
+## 6.8 Known limits of this feature
+
+| Limit                                                        | What it means / the next step                                                              |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| **No per-user limit**                                        | One user can reserve all the seats, one click at a time. Real shops cap this              |
+| **No payment**                                               | Orders stay `pending`: nothing ever sets `paid`                                            |
+| **Events made with the form have no ticket types**           | The form collects a `quantity`, but the create action doesn't save it, so `<TicketsList>` renders nothing for them. Only the seeded events have tickets |
+| **Reserving needs a sign-in, but doesn't redirect**          | By design (see 6.4). The button shows a link instead                                       |
+
+---
+
+# Part 7 — Error pages
+
+What happens when a query throws, for example the database is down? Without an error page the visitor sees Next.js's generic error. With one, they see **your** page, and the rest of the site keeps working. You met `error.tsx` in class 2. Now it's used for real:
+
+| File                                    | Catches errors in...                          | Notes                                                                                   |
+| --------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `app/(marketing)/events/error.tsx`      | `/events` and everything below it (the list and the event page) | A **Client Component**. The header, footer and breadcrumb **stay on screen** |
+| `app/global-error.tsx`                  | The **root layout** itself                    | The last safety net. It **replaces** the whole page, so it renders its own `<html>` and `<body>` and imports its own CSS |
+
+Things worth knowing:
+
+- **Both must be Client Components** (`'use client'`): error boundaries are a browser feature, and `retry` is called from an `onClick`.
+- **`retry()`** re-fetches and re-renders the failed part. In Next.js 16.3 it replaces the older `reset()`, which only re-rendered. Use it for temporary failures (a database blinking).
+- **`error.digest`** exists for **server** errors. In production the real message is hidden from the browser (it could leak internals), and a short **digest** is shown instead. It matches a line in the **server log**, so a user can report "Error ID abc123" and you can find the real cause.
+- **Drizzle error messages contain the whole failed SQL**, so the page uses `line-clamp-3` and `break-all` to keep a long query from wrecking the layout. (In production you'd show a friendly sentence and no message at all.)
+- **`error.tsx` does not catch errors in the layout of its own folder**, because the boundary sits *inside* that layout. That's what `global-error.tsx` is for, and it's why it must be dependency-free: no database, no session, no shared components that could throw too.
+- **Error vs not-found:** a missing event is `notFound()` (a 404, an expected situation). A thrown error is for the **unexpected**.
+
+Try it: stop PostgreSQL (`docker stop gatherly-db`), open `/events`, and see the error page. Start it again and press **Try again**.
+
+---
+
+# Part 8 — A file download: the calendar
+
+Each event page has an **"Add to calendar (.ics)"** link. It points to `/api/events/[slug]/calendar.ics`, a **Route Handler**: `route.ts`, the file for HTTP endpoints (the counterpart of `page.tsx`). Instead of a React component it exports a function named after the HTTP method:
+
+```ts
+export async function GET(request: NextRequest, ctx: RouteContext<'/api/events/[slug]/calendar.ics'>) {
+  const { slug } = await ctx.params;
+  const event = await getEventBySlug(slug);
+  if (!event) return new Response('Not found', { status: 404 });
+
+  return new Response(buildIcs(...), {
+    headers: {
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${slug}.ics"`,
+    },
+  });
+}
+```
+
+- **Why a Route Handler?** The answer is a **file** (not HTML), reached by a plain link (GET), and opened by other programs (a calendar app). A Server Action can't do that, and a page returns HTML.
+- **The headers do the work:** `Content-Type: text/calendar` says what it is, and `Content-Disposition: attachment` makes the browser **download** it with that file name.
+- **`lib/ics.ts`** writes the iCalendar text format ([RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)). Its rules are fussy: UTC dates (`20270312T080000Z`), escaping `\ ; ,` and line breaks inside text, **CRLF** line endings, and **folding** lines longer than 75 **bytes** (not characters: a Cyrillic letter is 2 bytes, an emoji 4, which is why it measures with `TextEncoder`). The `UID` is stable (`<event id>@gatherly`), so importing the file twice **updates** the entry instead of duplicating it.
+- **A plain `<a>`, not `<Link>`:** it's a download, not a page. `<Link>` is only for navigating between pages.
+- A handler speaks **HTTP**, so for a missing event we set `status: 404` ourselves. There's no `not-found.tsx` to render.
+
+This is the first Route Handler of our own. The next class builds a whole **JSON API** with them, see the [class 08 README](../class_08_apis/README.md). Two empty placeholder files (`app/api/events/route.ts` and `[slug]/route.ts`) are waiting for it.
+
+---
+
 ## Known issues in this snapshot
 
 You'll meet these when you run `npm run check` or try the app. Each is on purpose a good exercise:
@@ -542,6 +740,10 @@ You'll meet these when you run `npm run check` or try the app. Each is on purpos
 | Two files claim the home page: `app/page.tsx` and an empty `app/(marketing)/page.tsx` | One URL can't have two pages. Move the hero into `(marketing)/page.tsx` and delete `app/page.tsx` |
 | `npm run typecheck` fails in `mocks/` and `types/gatherly-event.ts`              | Unused leftovers importing types that no longer exist (`Event`, `User`). Delete them              |
 | Lint: `'quantity' ... never used`, `'eq'` and `'organizerId'` never used         | The first belongs to the unfinished ticket types, the other two to the owner `where` above        |
+| Events created with the form have **no ticket types**, so no tickets can be reserved for them | The form's `quantity` is validated but not saved. Create a `ticket_types` row in the same transaction |
+| `reserveTicket` has **no per-user limit** (one person can reserve every seat)    | Count the user's existing tickets for the event inside the locked transaction and refuse above a cap |
+| `db/queries/tickets.ts` has no `import 'server-only'`                            | Add it, like `db/queries/events.ts`, so a Client Component can't import database code             |
+| `app/api/events/route.ts` and `app/api/events/[slug]/route.ts` are **empty**     | Placeholders for class 8 (the JSON API). An empty `route.ts` exports no handler, so leave them until then, or fill them in (see the [class 08 README](../class_08_apis/README.md)) |
 
 ---
 
@@ -558,6 +760,12 @@ You'll meet these when you run `npm run check` or try the app. Each is on purpos
 9. **Write the Publish / Unpublish action.** A Server Action `setEventStatus(eventId, formData)`. Use the ownership pattern from 4.2: the owner is in the `WHERE`. What happens if a different organizer sends your event id?
 10. **Inspect the cookie.** In DevTools find the session cookie. Is it `HttpOnly`? Try `document.cookie` in the console. Why can't you see the token? What would an attacker with a script on your page get?
 11. **Think.** Why does `parseRole()` return `attendee` for unknown values instead of throwing an error? Why is `role` not a field the sign-up form can send?
+12. **Reserve a ticket.** Sign in, open a seeded event and press Reserve. Which rows appeared in `orders` and `tickets`? What is `tickets.code`, and why is it a random uuid?
+13. **Watch the rollback.** Make `reserveTicket` return `{ ok: false, error: 'Nope' }` on its first line, then click Reserve. What happens to the "N left" number, and which hook does it, with no code of yours?
+14. **Cause the race.** Remove `.for('update')`, then fire two reservations for a 1-seat ticket type at the same time (two browser tabs, or two `curl`s). Count the tickets. Put the lock back and repeat.
+15. **Limit one user.** Make `reserveTicket` refuse a user who already holds 4 tickets for the event. Where must the check go so it can't be raced?
+16. **Break the page.** Stop PostgreSQL and open an event. Which file shows the error page? Press **Try again** after starting the database. What would you see with `reset()` instead of `retry()`?
+17. **Read the calendar.** Download an `.ics` file and open it in a text editor. Find `DTSTART`, `UID` and `SUMMARY`. Change the event title to contain a comma and a Cyrillic letter, download again, and see the escaping and folding.
 
 ---
 

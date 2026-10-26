@@ -1,13 +1,13 @@
-# Class 07 — Authentication & Authorization with Better Auth
+# Class 08 — Route Handlers & a Public API
 
-Until now, Gatherly didn't know **who** was using it. In class 6 a fixed "demo organizer" created every event. In this class the app learns to **recognise people**: they sign in (with **GitHub**, and with email and password on the server side), the server remembers them with a **session**, and the app decides **what each person may do** with **roles**.
+Until now, everything Gatherly sent out was made **for people**: HTML pages. In this class it also learns to talk to **programs**: a phone app, another website, a script, a calendar. For that we build a small **public JSON API** with **Route Handlers**, the Next.js files that answer plain HTTP requests.
 
-We use **[Better Auth](https://www.better-auth.com/)**, a library that handles sign-up, sign-in, sessions and OAuth, so we don't write security-critical code ourselves.
+> 🧭 **Where we are:** two read-only endpoints work (`GET /api/events` and `GET /api/events/[slug]`), plus the calendar download from class 7 (`.ics`). The design is right (strict validation, a whitelist of public fields, one error format), but **two bugs** stop errors from working properly: they go out as HTTP **200**, and the list endpoint forgets a `return`. Both are explained in [Known issues](#known-issues-in-this-snapshot) and are great exercises.
 
-> 🧭 **Where we are:** Better Auth is installed and connected to our database, "Continue with GitHub" works, the header shows the signed-in user, `/dashboard` is guarded by role, and the old `users` table has been replaced. Some of it is **unfinished**: the create-event form still acts as the demo organizer, the email/password form has no screen yet, and a few pages and queries still skip the checks. Each gap is listed in [Known issues](#known-issues-in-this-snapshot) and is a good exercise.
+This folder is class 7 plus the API. Everything about sign-in, tickets and errors is explained in the [class 07 README](../class_07_auth/README.md).
 
 **On this page:**
-[Run it](#-run-it) · [Part 1: The ideas](#part-1--the-ideas-before-any-code) · [Part 2: GitHub credentials](#part-2--getting-the-github-credentials-step-by-step) · [Part 3: Implementing Better Auth](#part-3--implementing-better-auth-step-by-step) · [Part 4: Authorization in practice](#part-4--authorization-in-practice) · [Part 5: What changed in the data](#part-5--what-changed-in-the-data) · [Known issues](#known-issues-in-this-snapshot) · [Exercises](#-try-it-yourself) · [Links](#-useful-links)
+[Run it](#-run-it) · [Part 1: What is an API](#part-1--what-is-an-api) · [Part 2: Route Handlers step by step](#part-2--route-handlers-step-by-step) · [Part 3: The events API](#part-3--the-events-api) · [Part 4: Designing the response](#part-4--designing-the-response) · [Part 5: Validation and errors](#part-5--validation-and-errors) · [Part 6: Testing an API](#part-6--testing-an-api) · [Part 7: Security](#part-7--security-checklist-for-an-api) · [Known issues](#known-issues-in-this-snapshot) · [Exercises](#-try-it-yourself) · [Links](#-useful-links)
 
 ## 📁 What's in this folder
 
@@ -19,573 +19,403 @@ We use **[Better Auth](https://www.better-auth.com/)**, a library that handles s
 
 ## 🚀 Run it
 
-You need the PostgreSQL server from class 3 running ([class 03 README](../class_03_db/README.md), Steps 1–2).
+Same setup as class 7: PostgreSQL running ([class 03](../class_03_db/README.md)), a `.env` with `DATABASE_URL`, `BETTER_AUTH_SECRET` and (optionally) the GitHub values ([class 07, Part 2](../class_07_auth/README.md#part-2--getting-the-github-credentials-step-by-step)).
 
 ```bash
-cd class_07_auth/gatherly
-npm install                  # new packages: better-auth and @better-auth/drizzle-adapter
+cd class_08_apis/gatherly
+npm install
 cp .env.example .env         # skip if you already have .env (Windows PowerShell: Copy-Item .env.example .env)
-```
-
-Then open `.env` and fill in **three new values** (`DATABASE_URL` stays as before):
-
-| Variable               | What to put there                                                                                   |
-| ---------------------- | --------------------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`   | A long random string. Generate it: `npx auth@latest secret` (or `openssl rand -base64 32`)          |
-| `GITHUB_CLIENT_ID`     | From your GitHub OAuth app. See [Part 2](#part-2--getting-the-github-credentials-step-by-step)      |
-| `GITHUB_CLIENT_SECRET` | The same place. Shown **only once**                                                                 |
-
-The GitHub values are optional: without them the app runs, but the "Continue with GitHub" button doesn't appear.
-
-```bash
-npm run db:migrate           # NEW: migration 0004 creates the 4 auth tables and REPLACES the old `users` table
-npm run db:seed              # resets the database and fills it with demo data
+npm run db:migrate
+npm run db:seed              # see the first row of Known issues: the seed has a wrong import to fix first
 npm run dev
 ```
 
-> ⚠️ **Migration 0004 deletes the old `users` table** (`DROP TABLE "users" CASCADE`) and everything that depended on it, then points `events` and `orders` at the new `user` table. On a database with data from earlier classes, run `npm run db:seed` afterwards: it wipes and refills everything.
+Then call the API. The simplest way is the browser: open the URLs. Or use `curl` (Part 6):
 
-### Make yourself an organizer
-
-When you sign in with GitHub, Better Auth creates **your** user with the role **`attendee`**. The dashboard is for organizers, so at first you'll land on the "The dashboard is for organizers" page. That's the authorization working! To become an organizer, change your role in the database. Sign in once, then run (with **your** GitHub email):
-
-```sql
-UPDATE "user" SET role = 'organizer' WHERE email = 'you@example.com';
-```
-
-`"user"` needs the double quotes: `user` is a reserved word in PostgreSQL. Run it in `psql "<your DATABASE_URL>"`, or with Docker:
-
-```bash
-docker exec -it gatherly-db psql -U postgres -d gatherly -c "UPDATE \"user\" SET role = 'organizer' WHERE email = 'you@example.com';"
-```
-
-Reload `/dashboard`. The role is read from the database on each request, so no need to sign in again.
-
-> The seeded users (`avenga`, `js-mk`, `soundwave`, `demo-attendee`) are **data**: they own the demo events and orders, but they have no password or GitHub link, so nobody can sign in as them.
-
-Try these:
-
-| URL                                                              | What you should see                                                              |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| [/events](http://localhost:3000/events)                          | The header shows **Sign in**                                                     |
-| [/dashboard](http://localhost:3000/dashboard) (signed out)       | You're sent to `/sign-in?next=/dashboard`                                        |
-| [/sign-in](http://localhost:3000/sign-in)                        | The page with **Continue with GitHub**                                           |
-| After signing in as an attendee                                  | Back on the site, the header shows your name and **Sign out**; `/dashboard` → "The dashboard is for organizers" |
-| After you promote yourself                                       | The header gets a **Dashboard** link, and `/dashboard` opens                     |
+| URL                                                                           | What you get                                                              |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [/api/events](http://localhost:3000/api/events)                               | A page of published events, as JSON                                       |
+| [/api/events?q=next&sort=price](http://localhost:3000/api/events?q=next&sort=price) | Filtered and sorted                                                 |
+| [/api/events?page=2](http://localhost:3000/api/events?page=2)                 | The second page                                                           |
+| `/api/events/<a-real-slug>`                                                   | One event. Get a slug from the list                                       |
+| [/api/events/does-not-exist](http://localhost:3000/api/events/does-not-exist) | An error JSON (with the status bug, see Known issues)                     |
+| `/api/events/<a-real-slug>/calendar.ics`                                      | A downloaded calendar file                                                |
 
 ---
 
-# Part 1 — The ideas, before any code
+# Part 1 — What is an API?
 
-## 1.1 Authentication vs authorization
+An **API** (application programming interface) is a way for **programs** to talk to your app. A web **page** answers a browser with HTML that a person reads. An **API** answers any program with **data** (almost always JSON) that code reads.
 
-These two words sound alike and mean different things. You'll use both every day:
+```
+a person  ── GET /events/some-event ───────────►  Gatherly ─► HTML   (a page to look at)
+a program ── GET /api/events/some-event ───────►  Gatherly ─► JSON   (data to use)
+```
 
-| | **Authentication** ("authn") | **Authorization** ("authz") |
+The same app, the same database, the same query functions. Only the **last step** differs: render a page, or return data. That's why the queries live in `db/queries/` and not inside the pages.
+
+## 1.1 HTTP in one page
+
+An API is spoken in **HTTP**. Every exchange has a request and a response.
+
+**Methods** (what the client wants to do):
+
+| Method   | Meaning                       | Gatherly example                                 |
+| -------- | ----------------------------- | ------------------------------------------------ |
+| `GET`    | **Read.** Never changes data  | List events, get one event, download the `.ics`  |
+| `POST`   | **Create** something          | Create an event (later)                          |
+| `PUT` / `PATCH` | Replace / change something | Update an event                                |
+| `DELETE` | Remove something              | Cancel an event                                  |
+
+**Status codes** (how it went). The code is as important as the body, and clients read it **first**:
+
+| Code  | Name                   | Use it when                                                   |
+| ----- | ---------------------- | ------------------------------------------------------------- |
+| `200` | OK                     | It worked, and here's the data                                |
+| `201` | Created                | A new thing was created                                       |
+| `400` | Bad Request            | The **client** sent something invalid (a bad query string)    |
+| `401` | Unauthorized           | "Who are you?" Not signed in (class 7)                        |
+| `403` | Forbidden              | Signed in, but not allowed (class 7)                          |
+| `404` | Not Found              | No such thing (or one we won't confirm exists)                |
+| `500` | Internal Server Error  | **We** broke: a bug, or the database is down                  |
+
+Rule of thumb: **2xx** = success, **4xx** = the caller's fault (fixing the request helps), **5xx** = our fault.
+
+**Headers** are small labels on a request or response, such as `Content-Type: application/json` (what the body is) or `Content-Disposition: attachment` (download this).
+
+**JSON** is the data format: objects, arrays, strings, numbers, booleans, `null`. It has **no Date type**, so dates travel as text (ISO 8601: `"2027-03-12T08:00:00.000Z"`).
+
+## 1.2 Page, Server Action or Route Handler?
+
+You now have three ways to run code on the server. Choosing right is a skill:
+
+| You want to...                                                       | Use                                   | Why                                                         |
+| -------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------- |
+| Show something to a **person**                                       | A **page** (`page.tsx`)               | Returns HTML                                                |
+| **Change data** from **your own** form or button                     | A **Server Action** (class 6)         | Next.js wires the form and the function for you             |
+| Serve **other programs**: a JSON API, a **file download**, a webhook | A **Route Handler** (`route.ts`)      | You control the full HTTP response: status, headers, body   |
+
+Two warnings from our rules: don't create a Route Handler just so your own page can `fetch` it (a Server Component can query the database directly), and don't use a Server Action to serve data to other clients (they have no form to submit).
+
+---
+
+# Part 2 — Route Handlers, step by step
+
+## 2.1 The file: `route.ts`
+
+`route.ts` is to an API what `page.tsx` is to a page. A folder with a `route.ts` becomes an **endpoint** at that URL:
+
+```
+app/api/events/route.ts                      →  /api/events
+app/api/events/[slug]/route.ts               →  /api/events/some-slug
+app/api/events/[slug]/calendar.ics/route.ts  →  /api/events/some-slug/calendar.ics
+```
+
+(The folder name is just text, so a folder called `calendar.ics` gives a URL ending in `.ics`. We have no `page.tsx` there: a folder can't have both a `page.tsx` and a `route.ts` for the same URL.)
+
+Instead of a React component, a Route Handler **exports a function named after the HTTP method**. It receives a `Request` and returns a `Response`:
+
+```ts
+export async function GET(request: NextRequest) {
+  return Response.json({ message: 'Hello' });
+}
+```
+
+Supported names: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`. A method you don't export answers **405 Method Not Allowed** automatically.
+
+## 2.2 The tools you use
+
+| Tool                                | What it is                                                                                            |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `Request` / `Response`              | The **standard web** objects (the same as in `fetch`). No Next.js magic, so what you learn works elsewhere |
+| `NextRequest`                       | A `Request` with extras. The one we use: `request.nextUrl.searchParams` (the parsed query string)     |
+| `Response.json(body, init)`         | Answers with JSON, and sets `Content-Type` for you. **The status goes in `init`**: `{ status: 404 }`  |
+| `new Response(text, { headers })`   | Answers with anything else (plain text, a file), and you set the headers                              |
+| `RouteContext<'/api/events/[slug]'>` | A **global** type that knows this route's `params`. The Route Handler twin of `PageProps`            |
+| `await ctx.params`                  | The dynamic segments. A **Promise**, like in pages: always `await` it                                 |
+
+## 2.3 They run per request
+
+A `GET` Route Handler runs **on every request** by default (since Next.js 15). Nothing is cached unless you opt in. That's what we want for a JSON API that reads a database.
+
+## 2.4 Walk through the smallest one
+
+Open `app/api/events/[slug]/route.ts`. It's short and shows the whole pattern:
+
+```ts
+export async function GET(_request: NextRequest, ctx: RouteContext<'/api/events/[slug]'>) {
+  const { slug } = await ctx.params;                 // 1. read the URL part
+
+  const event = await getEventBySlug(slug);          // 2. ask the database (published events only)
+
+  if (!event) {
+    return apiError(404, 'not_found', `No published event ${slug}`);   // 3. not found: an error response
+  }
+
+  return Response.json({ data: toPublicEvent(event) });                // 4. success: the public shape
+}
+```
+
+Four steps: **read input → fetch → handle "not found" → return the right shape.** Every handler you'll ever write is a variation on this.
+
+---
+
+# Part 3 — The events API
+
+## 3.1 `GET /api/events`: list
+
+Query parameters (all optional):
+
+| Param      | Rule                                         | Default | Example               |
+| ---------- | -------------------------------------------- | ------- | --------------------- |
+| `q`        | text, at least 1 character                   | none    | `?q=next`             |
+| `category` | a category slug                              | none    | `?category=meetup`    |
+| `city`     | a city name                                  | none    | `?city=Skopje`        |
+| `from`     | a date `YYYY-MM-DD`                          | none    | `?from=2027-03-01`    |
+| `sort`     | `date`, `price` or `newest`                  | `date`  | `?sort=price`         |
+| `page`     | a whole number ≥ 1                           | `1`     | `?page=2`             |
+| `limit`    | a whole number 1 to 50 ⚠️ *currently ignored* | `20`   | `?limit=10`           |
+
+An unknown parameter (`?foo=1`) is an **error**, not ignored (Part 5). The answer:
+
+```json
+{
+  "data": [
+    {
+      "slug": "nextjs-conf-skopje-2027",
+      "title": "Next.js Conf Skopje 2027",
+      "description": "...",
+      "startsAt": "2027-03-12T08:00:00.000Z",
+      "endsAt": "2027-03-12T17:00:00.000Z",
+      "city": "Skopje",
+      "fromPriceCents": 4900,
+      "coverImageUrl": "https://...",
+      "venue": { "name": "Innovation Hub", "address": "Ul. Makedonija 11", "city": "Skopje" },
+      "organizer": { "name": "Avenga Academy", "handle": "avenga" },
+      "categories": ["conference"],
+      "links": { "page": "/events/nextjs-conf-skopje-2027", "calendar": "/api/events/nextjs-conf-skopje-2027/calendar.ics" }
+    }
+  ],
+  "page": 1,
+  "total": 12,
+  "pageCount": 2
+}
+```
+
+`data` holds the items, and `page`, `total` and `pageCount` let a client build its own "next page" button. It reuses `searchEvents(filters)`, the **same function** as the `/events` page.
+
+## 3.2 `GET /api/events/[slug]`: one event
+
+`{ "data": { ...one event... } }`, or a **404** error for an unknown slug **or an unpublished event**. A draft answers exactly like a missing event: the API never confirms that an event you may not see exists.
+
+## 3.3 `GET /api/events/[slug]/calendar.ics`: a file, not JSON
+
+Added in class 7. The same kind of handler, but the response is a **file**, so the headers do the work:
+
+```ts
+return new Response(ics, {
+  headers: {
+    'Content-Type': 'text/calendar; charset=utf-8',                // what it is
+    'Content-Disposition': `attachment; filename="${slug}.ics"`,   // download it, with this name
+  },
+});
+```
+
+`lib/ics.ts` builds the text in the iCalendar format (escaping, folding long lines, UTC dates). A calendar app can import the file, so this is a good example of something **only a Route Handler** can do. The event page links to it with a plain `<a>` (not `<Link>`: it's a download, not a page).
+
+---
+
+# Part 4 — Designing the response
+
+## 4.1 Never return a database row
+
+```ts
+return Response.json(event);   // ❌ tempting, and dangerous
+```
+
+A row has internal ids and **whatever columns get added next year** (an email, a flag, a note). With `Response.json(row)`, every new column **leaks automatically**. So we pick the public fields **one by one** in `lib/to-public-event.ts`:
+
+```ts
+return { slug: event.slug, title: event.title, startsAt: event.startsAt.toISOString(), ... };
+```
+
+That's a **whitelist**: a new column stays private until someone deliberately adds it. It also **decouples** the API from the database: renaming a column only changes the mapper, and the clients (which you don't control) keep working. (This is called a **DTO**, a data transfer object.)
+
+Look at what the mapper does besides hiding things:
+
+| It does...                                | Because...                                                                  |
+| ----------------------------------------- | --------------------------------------------------------------------------- |
+| `startsAt.toISOString()`                  | JSON has no Date type. ISO 8601 is understood everywhere                    |
+| `fromPriceCents` (not `minPriceCents`)    | A name for what it means to a client (and still cents: the client formats it) |
+| `categories` as an array of **slugs**     | A client wants `['meetup']`, not whole database objects                     |
+| `venue` and `organizer` with 3 and 2 fields | No venue id or capacity, and **no organizer email**                       |
+| `links`                                   | Tells clients where to go next, so they don't build URLs themselves         |
+
+The query goes one step earlier: the organizer is loaded with only `id`, `name` and `handle` (`withDetails` in `db/queries/events.ts`), so the email never even leaves the database.
+
+## 4.2 One envelope, one error shape
+
+Success always has `data` at the top (room to add `meta` or `links` later without breaking anyone). **Errors always look the same**, so a client can handle them with one piece of code (`lib/api.ts`):
+
+```json
+{ "error": { "code": "not_found", "message": "No published event abc" } }
+{ "error": { "code": "invalid_query", "message": "Invalid query parameters", "details": { "formErrors": [], "fieldErrors": { "sort": ["Invalid option: expected one of ..."] } } } }
+```
+
+`code` is a short, stable word that code can switch on, `message` is for the developer reading it, and `details` is optional extra (here Zod's field errors).
+
+## 4.3 Pagination
+
+Never return "all of them". The list is paged (`page`), with `total` and `pageCount` so a client knows where the end is. `limit` is capped at **50** in the schema, so nobody can ask for a million rows in one request. (Right now `searchEvents` still uses its own fixed page size of 6 and ignores `limit`: Known issues.)
+
+---
+
+# Part 5 — Validation and errors
+
+## 5.1 Strict for APIs, forgiving for pages
+
+You've seen the same Zod idea three times. The attitude differs on purpose:
+
+| | The `/events` **page** (`lib/event-filters.ts`) | The `/api/events` **API** (`route.ts`) |
 | --- | --- | --- |
-| The question | **Who are you?** | **What are you allowed to do?** |
-| Happens | When you sign in | On **every** request that needs a permission |
-| Examples | A password, "Continue with GitHub", a passkey | "Only organizers open the dashboard", "only the owner edits this event" |
-| In Gatherly | Better Auth: sessions, GitHub login | Roles (`lib/roles.ts`) and the guards (`lib/session.ts`) |
-| When it fails | **401** Unauthorized: "I don't know who you are" → sign-in page | **403** Forbidden: "I know who you are, but no" → a "not allowed" page |
+| Bad `?sort=garbage` | Quietly becomes the default. The visitor still sees a page | **400 Bad Request** with a message |
+| Unknown `?foo=1` | Ignored | **400** (`.strict()`) |
+| Why | A person typing in the address bar wants a page, not an error | A **program** can't read between the lines. A silent fix hides **its** bug |
 
-The failure case matters: a visitor who isn't signed in should be **sent to sign in**. An attendee who *is* signed in should be **told they aren't allowed**. Sending them to the sign-in page would be confusing, because they already signed in. That's why we have `/sign-in` **and** `/organizers-only`.
+In code, the API schema has no `.catch(...)`, and the object is `.strict()`:
 
-## 1.2 How a website remembers you: sessions and cookies
-
-HTTP has no memory. Every request is a stranger. After you sign in, the server must recognise you on the next click, **without** asking for your password again. The usual solution is a **session**:
-
-```
-1. You sign in.                   ──►  server checks the proof (password, or GitHub)
-2. The server creates a SESSION   ──►  a row in the `session` table:  { token: "k3j9…", userId, expiresAt }
-3. It sends the token as a COOKIE ◄──  Set-Cookie: better-auth.session_token=k3j9…; HttpOnly
-4. Every later request            ──►  the browser attaches the cookie automatically
-5. The server looks the token up  ──►  finds the session row, then the user: "this is Ana"
-6. Sign out                       ──►  the row is deleted and the cookie cleared: the token is dead
+```ts
+const Query = z.object({ sort: z.enum([...]).default('date'), page: z.coerce.number().int().min(1).default(1), ... }).strict();
 ```
 
-Key facts to remember:
+`.default(x)` fills in a value when the param is **absent**. A **present but invalid** value still fails. That's the difference from `.catch`.
 
-- The **cookie holds only a random token**, not your name or role. All the real information is in the database. A stolen token **is** that user, so it's protected: `HttpOnly` means JavaScript on the page **cannot read it**, so a script injected into the page can't steal it.
-- Because sessions are **rows in our database**, we can **revoke** them (delete the row to sign someone out everywhere), and they **expire** (by default after about a week).
-- The browser sends the cookie automatically, so Server Components, Server Actions and the proxy can all read it from the request headers.
-- On the server we ask Better Auth "who is this request from?" with `auth.api.getSession({ headers })`. On the client we use the `useSession()` hook.
-
-## 1.3 Passwords
-
-If someone signs up with an email and a password, rule number one is: **never store the password**. The database stores a **hash**, a one-way scramble: from the hash you can't get the password back, but you can check a typed password by hashing it the same way and comparing. Better Auth does this for us (with a deliberately slow hash, so guessing is expensive). The hash lives in `account.password`. You never write this code yourself, which is the whole point of using a library for authentication.
-
-## 1.4 OAuth: "Continue with GitHub"
-
-OAuth lets users sign in **with an account they already have**, so we never handle their password. GitHub vouches for them. The dance has six steps (the same one behind every "Continue with Google / GitHub / ..." button):
+## 5.2 The flow of a request
 
 ```
- You          Gatherly (our server)                         GitHub
-  │  click "Continue with GitHub"
-  │ ───────────────►│ 1. the auth client asks our server to start
-  │ ◄───────────────│ 2. our server answers with GitHub's authorization URL
-  │ ───────────────────────────────────────────────────────►│ 3. the browser goes to github.com
-  │                                                          │    you log in (if needed) and click "Authorize"
-  │ ◄────────────────────────────────────────────────────────│ 4. GitHub sends the browser BACK to our callback URL
-  │ ───────────────►│    /api/auth/callback/github?code=one-time-code
-  │                 │ 5. our server swaps the code for your profile, using the client SECRET
-  │                 │    creates or finds your `user` + `account`, creates a `session`, sets the cookie
-  │ ◄───────────────│ 6. you land on the page you wanted (`callbackURL`)
+GET /api/events?sort=banana
+  1. Object.fromEntries(request.nextUrl.searchParams)   →  { sort: 'banana' }
+  2. Query.safeParse(...)                                →  { success: false, error }
+  3. return apiError(400, 'invalid_query', ..., z.flattenError(error))   →  HTTP 400 + the JSON error
+  (valid input)
+  3. searchEvents(filters)                               →  the rows
+  4. Response.json({ data: events.map(toPublicEvent), page, total, pageCount })
 ```
 
-Three things identify **our app** to GitHub, and you create all of them when you register an "OAuth app" ([Part 2](#part-2--getting-the-github-credentials-step-by-step)):
+## 5.3 The status code is half of the error
 
-| Thing                | What it is                                                                                              |
-| -------------------- | ------------------------------------------------------------------------------------------------------- |
-| **Client ID**        | Public. "This is the app called Gatherly"                                                               |
-| **Client secret**    | **Private**, like a password. It proves that a request really comes from our server                     |
-| **Callback URL**     | The one address GitHub is allowed to send users back to: `http://localhost:3000/api/auth/callback/github` |
+`apiError(404, ...)` should make the **HTTP status** 404. In this snapshot it doesn't: `status` is written **inside the JSON body**, and the real HTTP status stays **200**. A client sees "success" with an error hidden in the body. Run it and look:
 
-The callback URL is a security feature: if it didn't have to match exactly, an attacker could make GitHub send the one-time code to *their* site.
+```bash
+curl -i http://localhost:3000/api/events/does-not-exist
+# HTTP/1.1 200 OK        ← should be 404
+# {"error":{"code":"not_found",...},"status":404}
+```
 
-## 1.5 Roles: who may do what
-
-A **role** is a label on a user that stands for a set of permissions. Gatherly has three, stored in `user.role`:
-
-| Role        | May...                                                         |
-| ----------- | -------------------------------------------------------------- |
-| `attendee`  | Browse events and buy tickets. **Everyone starts here**        |
-| `organizer` | Everything an attendee can, **plus** create and manage events  |
-| `admin`     | Everything, **plus** manage users                              |
-
-Two principles:
-
-- **Least privilege:** give each person the **minimum** they need. That's why a new account is an `attendee`, and why `parseRole()` turns anything unknown into `attendee` (when in doubt, fewer rights).
-- **The client never chooses its own role.** The sign-up form can't send `role=admin`. Better Auth marks that field as not accepted from the client.
-
-## 1.6 Where do you check? Four layers
-
-Beginners ask: "I hid the Dashboard link from attendees, is the dashboard protected?" **No.** Anyone can type the URL. Protection comes in layers, and **each one assumes the one before it failed**:
-
-| Layer                       | Example in Gatherly                                  | What it is worth                                                                                  |
-| --------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| 1. **The UI**               | The Dashboard link only shows for organizers         | **Courtesy.** Not security: a person can still type the address                                   |
-| 2. **The proxy**            | `proxy.ts` redirects visitors with **no cookie** away from `/dashboard` | **A bouncer.** It only checks that a cookie *exists*, and anyone can forge a cookie. Fast, optimistic, never enough |
-| 3. **The page**             | `requireOrganizer()` at the top of `/dashboard`      | **A lock.** It asks the **database**: is this session real, whose is it, is the role right?        |
-| 4. **The action and the query** | A Server Action that calls `requireOrganizer()`; a query that filters `WHERE organizer_id = <me>` | **The vault.** The only layer that protects the data itself, even from requests that skip your pages |
-
-Rule of thumb: **protect where the data or the change is, not only where the user clicks.** A Server Action is a public endpoint (class 6). A page check never covers the actions behind it.
+The fix is one change in `lib/api.ts`: pass the status as the **second argument** of `Response.json`, not in the body (exercise 1).
 
 ---
 
-# Part 2 — Getting the GitHub credentials, step by step
+# Part 6 — Testing an API
 
-You need a **GitHub OAuth app**. It's free and takes two minutes. You create **one app per environment**: this one is for development on your laptop (`localhost`).
+You don't need a front end to test an API:
 
-### Step 1: Open the developer settings
+| Tool                                | How                                                                                       |
+| ----------------------------------- | ----------------------------------------------------------------------------------------- |
+| **The browser**                     | Open the URL. Great for `GET`. Chrome and Firefox pretty-print JSON                       |
+| **`curl`** (terminal)               | `curl http://localhost:3000/api/events`. Add **`-i`** to see the **status line and headers** |
+| **A client app**                    | [Bruno](https://www.usebruno.com/), [Postman](https://www.postman.com/) or the VS Code extension Thunder Client: save and replay requests |
+| **DevTools → Network**              | Shows every request the browser makes, with status, headers and body                      |
 
-1. Sign in to [github.com](https://github.com).
-2. Click your **profile picture** (top right) → **Settings**.
-3. In the left sidebar, scroll **all the way down** and click **Developer settings**.
-4. Click **OAuth Apps**, then **New OAuth App** (if it's your first, the button says **Register a new application**).
-
-Shortcut: [github.com/settings/developers](https://github.com/settings/developers).
-
-### Step 2: Fill in the form
-
-| Field                          | Value                                                | Notes                                                                       |
-| ------------------------------ | ---------------------------------------------------- | --------------------------------------------------------------------------- |
-| **Application name**           | `Gatherly (local)`                                   | Users see this name on the "Authorize" screen. Anything you like            |
-| **Homepage URL**               | `http://localhost:3000`                              | Where your app lives. Must match the port you run on                        |
-| **Application description**    | *(optional)*                                         | Leave it empty, or write "Course project"                                   |
-| **Authorization callback URL** | `http://localhost:3000/api/auth/callback/github`     | ⚠️ **The one that matters.** Copy it exactly: same port, same path, no trailing slash |
-| **Enable Device Flow**         | *(leave unchecked)*                                  | For apps with no browser, such as a CLI                                      |
-
-Click **Register application**.
-
-> 💡 Why that exact callback URL? Better Auth serves its GitHub callback at `/api/auth/callback/github` (that's the `app/api/auth/[...all]/route.ts` file). GitHub only ever redirects users to the URL you registered. If they differ by one character, GitHub refuses with a `redirect_uri_mismatch` error.
-
-### Step 3: Copy the Client ID
-
-On the next page you'll see **Client ID**, a short string like `Ov23li...`. Copy it. It's not secret.
-
-### Step 4: Generate the Client secret
-
-1. Click **Generate a new client secret**. (GitHub may ask for your password or a 2FA code.)
-2. **Copy the secret immediately.** GitHub shows it **only once**. If you leave the page, you can't read it again, only generate a new one.
-
-### Step 5: Put them in `.env`
-
-In `class_07_auth/gatherly/.env`:
+Useful `curl` commands:
 
 ```bash
-GITHUB_CLIENT_ID=Ov23liXXXXXXXXXXXXXX
-GITHUB_CLIENT_SECRET=paste-the-long-secret-here
-BETTER_AUTH_SECRET=paste-a-generated-secret-here
+curl http://localhost:3000/api/events                              # the list
+curl "http://localhost:3000/api/events?q=next&sort=price&page=1"   # quote the URL: & means something to the shell
+curl -i http://localhost:3000/api/events/does-not-exist            # -i: show the status and headers
+curl -i "http://localhost:3000/api/events?sort=banana"             # should be 400
+curl -OJ http://localhost:3000/api/events/<slug>/calendar.ics      # download the file (-O save, -J use the server's file name)
 ```
 
-Generate `BETTER_AUTH_SECRET` with `npx auth@latest secret` (or `openssl rand -base64 32`). It's a separate secret: it signs and encrypts Better Auth's data, and has nothing to do with GitHub.
-
-### Step 6: Restart and test
-
-1. **Restart `npm run dev`.** Environment variables are read **when the server starts**, so the new values are invisible until you do.
-2. Open [/sign-in](http://localhost:3000/sign-in): the **Continue with GitHub** button should be there.
-3. Click it → GitHub asks you to authorize → you land back on Gatherly, and the header shows your name.
-4. Look in the database: a row in `user`, one in `account` (`provider_id = 'github'`), one in `session`.
-
-### 🔒 Keep the secret secret
-
-- `.env` is in `.gitignore` for a reason: **never commit it**. The template `.env.example` has the variable names and **empty** values, and that's what gets committed.
-- If the secret leaks (pushed to GitHub, pasted in a chat), go back to the OAuth app and click **Generate a new client secret**, then **delete the old one**. Treat a leaked secret as burned.
-- **Production needs its own OAuth app**, with your real address: Homepage `https://your-domain.com`, callback `https://your-domain.com/api/auth/callback/github`. Put its id and secret in your hosting provider's environment variables, never in the repository.
-
-### Troubleshooting
-
-| Problem                                                          | Likely cause → fix                                                                                          |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| No "Continue with GitHub" button                                 | One of `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` is empty or missing, or you didn't restart the dev server |
-| GitHub shows `redirect_uri_mismatch`                             | The registered callback URL isn't exactly `http://localhost:3000/api/auth/callback/github`. Check the port (3000 vs 3001) and typos |
-| `Application not found` / "Not Found" on GitHub                  | The client id is wrong or has a typo (extra space, missing character)                                       |
-| `Bad credentials` / error right after authorizing                | The client **secret** is wrong, or you regenerated it and kept the old value                                |
-| I lost the client secret                                         | You can't read it again. Click **Generate a new client secret** and update `.env`                           |
-| The app runs on another port (e.g. 3001)                         | Edit the OAuth app's Homepage and callback URLs to use that port, or stop whatever uses 3000                |
-| An error about the email (`email_not_found`)                     | Your GitHub account has no email Better Auth can read. Add an email in GitHub → Settings → Emails, and uncheck "Keep my email addresses private" or make sure a primary email exists |
+**What to check** every time: the **status code**, the **`Content-Type`** header, and that the body contains **only** what you meant to expose.
 
 ---
 
-# Part 3 — Implementing Better Auth, step by step
-
-This is what we did in class, in order. Each step names the file, so you can open it and compare. (To add authentication to **your own** project, follow the same steps.)
-
-## Step 1. Install
-
-```bash
-npm install better-auth @better-auth/drizzle-adapter
-```
-
-- `better-auth`: the library.
-- `@better-auth/drizzle-adapter`: lets it read and write through **our Drizzle `db`**. (Better Auth's docs import it from `better-auth/adapters/drizzle`; in version 1.7 it's also its own package. Either way, copy the import you find in your `package.json` version.)
-
-## Step 2. Environment variables
-
-`BETTER_AUTH_SECRET` (a long random string) and, optionally, the two GitHub values from [Part 2](#part-2--getting-the-github-credentials-step-by-step). The docs also mention `BETTER_AUTH_URL` (your app's base URL, e.g. `http://localhost:3000`): optional locally, but set it in production.
-
-## Step 3. The auth server: `db/auth.ts`
-
-The one file where Better Auth is **configured**. Read it top to bottom, it's short:
-
-```ts
-export const auth = betterAuth({
-  database: drizzleAdapter(db, { provider: 'pg', schema }),         // 1. where the data lives
-  emailAndPassword: { enabled: true, minPasswordLength: 8, autoSignIn: true },  // 2. passwords
-  socialProviders: github,                                           // 3. "Continue with GitHub"
-  user: { additionalFields: { handle: { type: 'string', required: false, unique: true, input: false } } },  // 4. an extra column
-  plugins: [admin({ defaultRole: 'attendee', adminRoles: ['admin'] }), nextCookies()],     // 5. roles + Server Action cookies
-});
-```
-
-| Option                | What it does                                                                                                         |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `database`            | Stores users and sessions in **PostgreSQL**, through Drizzle, using the tables in `db/auth-schema.ts`                |
-| `emailAndPassword`    | Turns on password sign-up. `autoSignIn`: signed in right after sign-up. The password is **hashed**                   |
-| `socialProviders`     | Turns on GitHub. It's built conditionally: **no env values → no GitHub**, and the app still starts                   |
-| `additionalFields`    | Adds our own column to `user`. `input: false`: the **client can't set it**, only our server                          |
-| `admin(...)` plugin   | Adds a `role` to every user (default `attendee`), and `banned` / `banReason` / `banExpires`                          |
-| `nextCookies()` plugin | Lets **Server Actions** set the session cookie. Docs: it must be the **last** plugin                                |
-
-The file starts with `import 'server-only'`: it holds secrets, so a Client Component importing it **fails the build**. At the bottom, `typeof auth.$Infer.Session` gives us a `Session` type that matches this exact configuration (so `session.user.role` is typed).
-
-## Step 4. The database tables
-
-Better Auth needs four tables: `user`, `session`, `account`, `verification`. The CLI can write them for you in Drizzle's format:
-
-```bash
-npx auth@latest generate
-```
-
-That produced `db/auth-schema.ts`. Then the normal Drizzle workflow from class 3:
-
-```bash
-npm run db:generate     # writes drizzle/0004_*.sql: READ IT
-npm run db:migrate      # applies it
-```
-
-What `0004_petite_penance.sql` does. Open it and find each line:
-
-| In the migration                                                                 | What it means                                                                         |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `CREATE TABLE "user"`, `"session"`, `"account"`, `"verification"`                | The four Better Auth tables                                                           |
-| `DROP TABLE "users" CASCADE`                                                     | Our **old** `users` table is deleted. Better Auth's `user` replaces it ⚠️ data loss    |
-| `ALTER COLUMN "organizer_id" SET DATA TYPE text` (and `"user_id"` on orders)     | Better Auth's ids are **strings**, our old ones were uuids, so the columns pointing at users change type |
-| `ADD CONSTRAINT "events_organizer_id_user_id_fk" ...`                            | `events.organizer_id` now points at `user.id`. Same for `orders.user_id`              |
-
-**Why one user table?** An organizer is a user. Keeping two tables ("Better Auth's users" and "our users") means keeping them in sync forever. One table, with our own columns added (`handle`, `role`), is simpler. The change in `db/schema.ts` is small: `import { user } from './auth-schema'`, and the foreign keys point there.
-
-## Step 5. The route handler: `app/api/auth/[...all]/route.ts`
-
-```ts
-export const { GET, POST } = toNextJsHandler(auth);
-```
-
-Two lines that expose Better Auth over HTTP, under `/api/auth/*`: sign-in, sign-out, get-session, and the `callback/github` URL from Part 2. `[...all]` is a **catch-all** segment, and `route.ts` is the special file for API endpoints (the counterpart of `page.tsx`). Keep this path: it's Better Auth's default, and the GitHub callback depends on it.
-
-## Step 6. The auth client: `lib/auth-client.ts`
-
-```ts
-export const authClient = createAuthClient({
-  plugins: [adminClient(), inferAdditionalFields<typeof auth>()],
-});
-export const { signIn, signUp, signOut, useSession } = authClient;
-```
-
-The browser-side twin of `auth`. It has **no secrets**: it just sends requests to `/api/auth/*`, and the browser attaches the cookie. The plugins give it the same types the server has (the `role`, the extra `handle`). Note `import type { auth }`: **only the type** crosses over, no server code.
-
-| You write                                         | What it does                                                         |
-| ------------------------------------------------- | -------------------------------------------------------------------- |
-| `signIn.social({ provider: 'github', callbackURL })` | Starts the GitHub flow                                            |
-| `signIn.email({ email, password })`               | Signs in with a password                                             |
-| `signUp.email({ name, email, password })`         | Creates an account                                                   |
-| `signOut()`                                       | Ends the session                                                     |
-| `useSession()`                                    | A hook: `{ data: session, isPending }`. Re-renders when it changes   |
-
-## Step 7. Reading the user on the server: `lib/session.ts`
-
-```ts
-await auth.api.getSession({ headers: await headers() })
-```
-
-We hand Better Auth the request's headers. It reads the cookie, finds the session row, checks it hasn't expired, and returns `{ session, user }` or `null`. Three helpers build on it:
-
-| Helper                     | Returns / does                                               | Failure                                    |
-| -------------------------- | ------------------------------------------------------------ | ------------------------------------------ |
-| `getCurrentUser()`         | The user, or `null`. **Never redirects**                     | `null`                                     |
-| `requireUser(returnTo)`    | A signed-in user                                             | Redirect to `/sign-in?next=<returnTo>`     |
-| `requireOrganizer(returnTo)` | A signed-in **organizer or admin**                         | Not signed in → sign-in. Wrong role → `/organizers-only` |
-
-Use one **at the top** of every page, action or query that needs a user:
-
-```ts
-const organizer = await requireOrganizer('/dashboard');   // stops here if not allowed
-```
-
-Because `redirect()` throws, nothing below that line runs, and TypeScript knows `organizer` is a real user afterwards.
-
-## Step 8. The proxy: `proxy.ts`
-
-Code that runs **before** a request reaches a page (in Next.js 16 `proxy.ts` replaces `middleware.ts`, and the function is called `proxy`). Ours sends anyone **without a session cookie** away from `/dashboard/*` to the sign-in page, remembering where they were going in `?next=`:
-
-```ts
-export const config = { matcher: ['/dashboard/:path*'] };   // run only for these paths
-```
-
-> ⚠️ `getSessionCookie` only checks that a cookie **exists**, not that it's valid. Anyone can create a cookie by hand in the browser (exercise 3). So the proxy is a fast first filter for honest visitors, and the **real** check is `requireOrganizer()` inside the page. Better Auth's docs give the same warning. Also keep the proxy **cheap**: no database calls in it.
-
-## Step 9. The sign-in UI
-
-| File                                        | Job                                                                                                |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `app/(marketing)/sign-in/page.tsx`, `sign-up/page.tsx` | Server pages: read `?next=` and whether GitHub is configured, then render the form     |
-| `app/(marketing)/_components/auth.form.tsx` | Client Component: the title and the **Continue with GitHub** button (`signIn.social`)              |
-| `app/(marketing)/_components/safe-next.ts`  | Makes the `?next=` value **safe** (see below)                                                      |
-| `components/account-menu.tsx`               | Client Component in the header: "Sign in", or name + Dashboard (organizers) + "Sign out"           |
-| `app/(marketing)/organizers-only/page.tsx`  | The "403" page for signed-in attendees                                                             |
-
-Two details worth understanding:
-
-**Why does the server page read the env vars and pass a `boolean`?** A Client Component must never see `process.env.GITHUB_CLIENT_SECRET`. The server page checks that both values exist and passes only `githubEnabled: true | false` down.
-
-**Why `safeNext`?** After signing in, we send people back to the page they wanted (`/sign-in?next=/dashboard`). But `next` is **user input**: someone could send a victim `/sign-in?next=https://evil.example`, and if we obeyed, the victim would sign in on *our* site and land on *theirs*. That's an **open redirect**. `safeNext` only accepts a **path on our site** (one leading `/`, not `//`). (One hole remains: browsers read a backslash like a slash, so `/\evil.example` slips through. A stricter version rejects `\`. See exercise 8.)
-
-**Why `router.refresh()` after `signOut()`?** The page on screen was rendered by the server for the *old* user. `refresh()` re-runs the Server Components, so a protected page doesn't stay visible after you sign out.
-
-## Step 10. Roles
-
-| File             | Job                                                                                          |
-| ---------------- | -------------------------------------------------------------------------------------------- |
-| `types/role.ts`  | `type Role = 'attendee' \| 'organizer' \| 'admin'`                                           |
-| `lib/roles.ts`   | `parseRole()`: any string → a valid `Role` (unknown → `attendee`). `canManageEvents(role)`   |
-
-`user.role` is plain **text** in the database, so it could hold a typo. `parseRole` is the safety net, and `canManageEvents` is the **one place** that says who may manage events. Change the rule there and it changes everywhere. The `admin` plugin only knows `admin` and `user` itself; **`organizer` is our own role**, a string that our code understands.
-
-## Step 11. Protect things
-
-| What                                  | Status in this snapshot                                                                           |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `/dashboard` page                     | ✅ `requireOrganizer('/dashboard')` + the proxy                                                    |
-| `/dashboard/events/new` **page**      | ❌ only the proxy (a cookie check). A signed-in attendee can open it                               |
-| `createEvent` **Server Action**       | ❌ still the demo organizer from class 6 (and it no longer compiles: the `users` table is gone)    |
-| The dashboard **query**               | ❌ `getOrganizerEvents(organizer.id)` receives the id and **ignores** it: everyone sees everything |
-
-Closing these gaps is the best practice for this class. See [Part 4](#part-4--authorization-in-practice) and the exercises.
-
-## Step 12. Test it
-
-| Do this                                                              | You should see                                                                |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Open `/dashboard` signed out                                         | Redirect to `/sign-in?next=%2Fdashboard`                                      |
-| Click **Continue with GitHub**, authorize                            | Back on the site; the header shows your name                                  |
-| Check the database                                                   | New rows in `user`, `account` (`github`) and `session`                        |
-| Open `/dashboard` as an attendee                                     | "The dashboard is for organizers"                                             |
-| Promote yourself (SQL above), reload `/dashboard`                    | The dashboard opens; the header has a **Dashboard** link                      |
-| Click **Sign out**                                                   | The header says **Sign in**; `/dashboard` redirects you again                 |
-| DevTools → Application → Cookies                                     | A `better-auth.session_token` cookie while signed in, marked **HttpOnly**     |
-| Open `/sign-in?next=https://example.com`, sign in                    | You land on the home page, **not** on example.com                             |
-
-## Follow one request: visiting `/dashboard`
-
-```
-browser ── GET /dashboard (+ the session cookie) ──►
-   1. proxy.ts            cookie exists?   no  → redirect to /sign-in?next=/dashboard
-                                           yes ↓
-   2. the dashboard page  requireOrganizer('/dashboard')
-        └ getCurrentUser   auth.api.getSession({ headers }) → looks the token up in the `session` table
-              no session            → redirect to /sign-in
-              session, wrong role   → redirect to /organizers-only
-              session, organizer    ↓
-   3. getOrganizerEvents  reads the events (should filter by organizer: see Known issues)
-   4. the page renders    and is sent to the browser
-```
-
----
-
-# Part 4 — Authorization in practice
-
-## 4.1 The guard pattern
-
-At the top of anything that needs a permission:
-
-```ts
-const organizer = await requireOrganizer('/dashboard/events/new');
-```
-
-For a **page**, the redirect sends the user somewhere helpful. For a **Server Action**, remember that it's a public endpoint: a script calling it directly gets the redirect too, which is fine, it's refused. What matters is that the **check is the first thing that runs**.
-
-## 4.2 Ownership: "is this MINE?"
-
-Being an organizer doesn't mean you can touch **every** event, only **your own**. Checking the **role** is not enough. You also check **ownership**. Forgetting this is the most common serious security bug in web apps, so common it has a name: **broken access control** (OWASP's #1). Two classic forms:
-
-- **Seeing other people's data.** `getOrganizerEvents` returns every event instead of the signed-in organizer's. (That's the gap in this snapshot.)
-- **Changing other people's data (IDOR).** A "publish" button sends `eventId`. If the action does `UPDATE events SET status = 'published' WHERE id = <eventId>`, **any** organizer can publish **anyone's** event by changing the id in the request.
-
-The fix is always the same: **put the owner in the `WHERE`**:
-
-```ts
-// reading
-db.query.events.findMany({ where: eq(events.organizerId, organizer.id), ... })
-
-// changing: only a row that is BOTH this id AND mine
-await db.update(events)
-  .set({ status: 'published' })
-  .where(and(eq(events.id, eventId), eq(events.organizerId, organizer.id)))
-  .returning({ id: events.id });   // empty result = "not yours (or doesn't exist)"
-```
-
-The owner id comes from **the session** (`organizer.id`), never from the form or the URL.
-
-## 4.3 Where each check lives
-
-| Layer           | File(s)                                          | Done?                                            |
-| --------------- | ------------------------------------------------ | ------------------------------------------------ |
-| UI              | `components/account-menu.tsx`                    | ✅ (courtesy only)                                |
-| Proxy           | `proxy.ts`                                       | ✅ cookie check                                   |
-| Page            | `dashboard/page.tsx`                             | ✅ · `dashboard/events/new/page.tsx` ❌            |
-| Action          | `app/actions/events.ts`                          | ❌ demo organizer                                 |
-| Query           | `db/queries/dashboard.ts`                        | ❌ ignores the owner                              |
-
-## 4.4 Common mistakes
-
-| Mistake                                                         | Why it hurts                                                                          |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| "I hid the button" is the protection                            | The URL still works. Check on the server                                              |
-| Trusting a cookie's **existence** (the proxy alone)             | Cookies can be forged. Validate the session with `getSession`                         |
-| Checking the role but not the **owner**                         | Any organizer reads or edits any organizer's data                                     |
-| Taking `userId` / `organizerId` / `role` from a **form field**  | The user can edit it. Take it from the session                                        |
-| Guarding the page but not the **action** behind it              | The action is its own public endpoint                                                 |
-| Redirecting to a `?next=` **without checking it**               | Open redirect: your site becomes a phishing tool                                      |
-| Telling the world *why* a login failed ("no such email")        | Helps attackers find real accounts. Say "invalid email or password"                   |
-| Committing `.env`                                               | The secrets are public forever, even if you delete the file later                     |
-
----
-
-# Part 5 — What changed in the data
-
-```
-BEFORE (classes 3–6)                         NOW (class 7)
-
-users (uuid id)                              user (text id)       ◄── Better Auth's table
-  ▲                                            ▲   ▲   ▲
-  │ events.organizer_id (uuid)                 │   │   └ session.user_id        (cascade)
-  │ orders.user_id (uuid)                      │   └──── account.user_id        (cascade)
-                                               │ events.organizer_id (text)
-                                               │ orders.user_id (text)
-                                             verification (standalone)
-```
-
-- **`users` is gone**; `user` replaces it, with `role`, `handle` and the ban fields added.
-- **`session`** (one row per signed-in browser) and **`account`** (how each user signs in) are new.
-- **Deleting a user** deletes their sessions and accounts (`cascade`), but **not** their events or orders (those have no `cascade`: you can't delete a user who has events or orders, which protects history).
-- **The seed** (`db/seed.ts`) wipes everything and inserts `user` rows directly: 3 fixed organizers, a demo attendee, and random attendees. It creates **no `account` rows**, so no seeded user can sign in. They exist to own events and orders.
-- **`organizerId` and `userId` are `text`** now, because that's what Better Auth's ids are.
+# Part 7 — Security checklist for an API
+
+A public API is a door for anyone, including people who mean harm. Before you ship an endpoint:
+
+1. ✅ **Validate every input** (query string, body, params) with a schema. Reject unknown fields.
+2. ✅ **Whitelist the output.** A mapper like `toPublicEvent`, never `Response.json(row)`.
+3. ✅ **Cap the page size** (`limit` max) so one request can't read the whole table or overload the server.
+4. ✅ **Don't confirm what you hide.** A draft event answers 404, not "403, it exists but you can't see it".
+5. ✅ **Use the right status codes**, so clients, caches and monitoring understand what happened.
+6. ✅ **Anything that changes data needs authentication and authorization** (class 7): read the session, check the role, and check **ownership**. This API is read-only and public, so it needs neither yet. A `POST /api/events` would need both, just like the Server Action.
+7. ✅ **Never put secrets in a response**, and don't leak internals in errors (a stack trace, the SQL, a file path).
+8. ✅ **Think about abuse.** A public endpoint can be hammered, so real APIs add **rate limiting**. Browsers also enforce **CORS** (which other websites may call your API from a browser). Neither is set up here.
 
 ---
 
 ## Known issues in this snapshot
 
-You'll meet these when you run `npm run check` or try the app. Each is on purpose a good exercise:
+Run `npm run check` and call the API, and you'll meet these. Fix them in this order:
 
-| Problem                                                                          | Why / how to fix                                                                                  |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `npm run typecheck`: `db/demo-users.ts` has no exported member `users`           | The old `users` table is gone. The file is **obsolete**: delete it once the actions use the session (next row) |
-| **`createEvent` still uses `getDemoOrganizer()`** (the form fails with "Demo user ... not found") | Replace it with `const organizer = await requireOrganizer('/dashboard/events/new')`, and use `organizer.id` as `organizerId` |
-| `/dashboard/events/new` **page** has no guard                                    | Add `await requireOrganizer('/dashboard/events/new')` at the top. A signed-in attendee can open it now |
-| **`getOrganizerEvents` ignores the owner**: every organizer sees everyone's events | Restore the commented-out `where: eq(events.organizerId, organizerId)`, and remove the unused-variable lint errors |
-| `/sign-in` shows "Create an account" and the function is named `SingInPage`      | The page passes `mode="sign-up"`. Change it to `"sign-in"` and fix the typo                       |
-| No email/password form, although `emailAndPassword` is on                        | `AuthForm` only has the GitHub button. Build the fields with `signIn.email` and `signUp.email` (exercise 6) |
-| The dashboard says "Signed in as JohnDoe"                                        | Hard-coded. Print `organizer.name`                                                                |
-| `safeNext` lets `/\evil.example` through                                         | Also reject any value containing a backslash                                                      |
-| `getCurrentUser()` queries the database on every call                            | In one request it may be called several times. Wrap it in React's `cache()` to share the result   |
-| Two files claim the home page: `app/page.tsx` and an empty `app/(marketing)/page.tsx` | One URL can't have two pages. Move the hero into `(marketing)/page.tsx` and delete `app/page.tsx` |
-| `npm run typecheck` fails in `mocks/` and `types/gatherly-event.ts`              | Unused leftovers importing types that no longer exist (`Event`, `User`). Delete them              |
-| Lint: `'quantity' ... never used`, `'eq'` and `'organizerId'` never used         | The first belongs to the unfinished ticket types, the other two to the owner `where` above        |
+| Problem                                                                      | Why / how to fix                                                                                  |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `npm run db:seed` fails: `Module not found: Can't resolve '@/node_modules/@types/pg'` (`db/seed.ts`) | An auto-import picked a path inside `node_modules/@types`. Use `import { Pool } from 'pg';` (class 7's seed has it right) |
+| **`apiError` sends HTTP 200** with the status inside the body (`lib/api.ts`) | Pass the status as the **second argument**: `Response.json({ error: ... }, { status })`. Check with `curl -i` |
+| **`GET /api/events` never returns the 400.** `apiError(...)` has no `return` (`app/api/events/route.ts`) | A bad query continues with `parsed.data` undefined and crashes with a 500. Write `return apiError(...)` |
+| **`limit` is accepted but ignored**                                          | `searchEvents` always uses `PAGE_SIZE` (6). Make the page size a parameter, or drop `limit` from the schema |
+| Unused import `error` from `'console'` (`lib/api.ts`)                        | A leftover auto-import. Delete the line (ESLint reports it)                                       |
+| `db/demo-users.ts` doesn't compile; `createEvent` still uses the demo organizer | The `users` table is gone since class 7. Switch the action to `requireOrganizer()` and delete the file |
+| Several protection gaps from class 7 (the new-event page, the dashboard query ignoring the owner) | See the *Known issues* of the [class 07 README](../class_07_auth/README.md#known-issues-in-this-snapshot) |
+| `npm run typecheck` fails in `mocks/` and `types/gatherly-event.ts`          | Unused leftovers importing types that no longer exist. Delete them                                |
+| Two files for the home page: `app/page.tsx` and an empty `app/(marketing)/page.tsx` | Move the hero into `(marketing)/page.tsx` and delete `app/page.tsx`                         |
 
 ---
 
 ## 🏋️ Try it yourself
 
-1. **Create your own GitHub OAuth app** ([Part 2](#part-2--getting-the-github-credentials-step-by-step)), sign in, and look at the new rows in `user`, `account` and `session`. What is in `account.provider_id`? What is in `session.token`?
-2. **Promote and demote yourself.** Become an organizer with the SQL, open `/dashboard`, then set the role back to `attendee`. Where do you land, and which file sends you there?
-3. **Forge a cookie.** Sign out. In DevTools → Application → Cookies, create a cookie named `better-auth.session_token` with the value `abc`, and open `/dashboard`. Does the proxy let you in? Does the page? Which line stopped you, and what does this teach you about the proxy?
-4. **Guard the form.** Add `requireOrganizer(...)` to the top of `dashboard/events/new/page.tsx` **and** replace `getDemoOrganizer()` in `createEvent`. Use `organizer.id` as the event's owner. Then delete `db/demo-users.ts`.
-5. **Fix the leak.** Restore the `where` in `getOrganizerEvents`. Test it: in `psql`, change one event's `organizer_id` to another user's id, and check it disappears from your dashboard.
-6. **Build the email/password form.** Add fields to `AuthForm`: sign-up (name, email, password) and sign-in (email, password). Use `signUp.email` and `signIn.email`. Show errors in plain language, show a pending state, and **don't** reveal whether an email exists.
-7. **Fix the sign-in page** (`mode`, the typo), and show `organizer.name` on the dashboard.
-8. **Close the open-redirect hole.** Test `/sign-in?next=/\evil.example`. Make `safeNext` reject it.
-9. **Write the Publish / Unpublish action.** A Server Action `setEventStatus(eventId, formData)`. Use the ownership pattern from 4.2: the owner is in the `WHERE`. What happens if a different organizer sends your event id?
-10. **Inspect the cookie.** In DevTools find the session cookie. Is it `HttpOnly`? Try `document.cookie` in the console. Why can't you see the token? What would an attacker with a script on your page get?
-11. **Think.** Why does `parseRole()` return `attendee` for unknown values instead of throwing an error? Why is `role` not a field the sign-up form can send?
+1. **Fix the status code.** Change `apiError` so the HTTP status is real. Check with `curl -i` that `/api/events/does-not-exist` gives `404 Not Found`. What did the client see before?
+2. **Fix the missing `return`.** Call `/api/events?sort=banana` before and after the fix. What status and body do you get each time?
+3. **Make `limit` work.** Let `searchEvents` take a page size (default 6). Does `/api/events?limit=3` return 3? Does `pageCount` still add up?
+4. **Read the JSON like a client.** Call `/api/events` and list every field you get. Which fields of the database row are **not** there? Open `toPublicEvent` and explain why each one is missing.
+5. **Add a field.** Add `capacity` (from the venue) to the public event. What did you have to change, and what **didn't** you have to touch?
+6. **Break it on purpose.** Call `/api/events?foo=1`, `?page=0`, `?page=abc`, `?limit=1000`. For each: what do you expect, and what do you get? Which Zod rule decides?
+7. **Download the calendar.** Fetch the `.ics` with `curl -i` and read the headers. Then open the file in your calendar app. What happens if you remove the `Content-Disposition` header?
+8. **Write a new endpoint.** `GET /api/categories` that returns `{ data: [{ name, slug }] }`. Use a whitelist mapper, and a real status code for errors.
+9. **Think.** Where would you put the `getCurrentUser()` check to make `POST /api/events` safe? What would it return to a visitor, and what to an attendee? (Hint: 401 and 403.)
+10. **Compare.** The same list exists as a page (`/events`) and as an API (`/api/events`). What do they share, and what is different? Why is it good that both call `searchEvents`?
 
 ---
 
 ## 🔗 Useful links
 
-**Better Auth**
+**Route Handlers**
 
-- [Installation](https://www.better-auth.com/docs/installation) and [Next.js integration](https://www.better-auth.com/docs/integrations/next) (route handler, `nextCookies`, `proxy.ts`)
-- [GitHub provider](https://www.better-auth.com/docs/authentication/github) and [Email & password](https://www.better-auth.com/docs/authentication/email-password)
-- [Drizzle adapter](https://www.better-auth.com/docs/adapters/drizzle), [Database schema](https://www.better-auth.com/docs/concepts/database) and [Session management](https://www.better-auth.com/docs/concepts/session-management)
-- [Admin plugin](https://www.better-auth.com/docs/plugins/admin) (roles, banning, impersonation)
+- [`route.js` reference](https://nextjs.org/docs/app/api-reference/file-conventions/route) — methods, `RouteContext`, caching, cookies and headers
+- [Next.js: Route Handlers](https://nextjs.org/docs/app/getting-started/route-handlers) and [Backend for Frontend](https://nextjs.org/docs/app/guides/backend-for-frontend)
+- [`NextRequest`](https://nextjs.org/docs/app/api-reference/functions/next-request) and [`NextResponse`](https://nextjs.org/docs/app/api-reference/functions/next-response)
+- MDN: [`Request`](https://developer.mozilla.org/en-US/docs/Web/API/Request), [`Response`](https://developer.mozilla.org/en-US/docs/Web/API/Response) and [`Response.json()`](https://developer.mozilla.org/en-US/docs/Web/API/Response/json_static)
 
-**GitHub**
+**HTTP and API design**
 
-- [Creating an OAuth app](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) and [your developer settings](https://github.com/settings/developers)
+- MDN: [HTTP overview](https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview), [request methods](https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods), [status codes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status) and [`Content-Disposition`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Disposition)
+- [JSON](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting/JSON) (MDN) and [ISO 8601 dates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toISOString)
+- [REST API design: the basics](https://restfulapi.net/) and [CORS explained](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS) (MDN)
+- [iCalendar (RFC 5545)](https://datatracker.ietf.org/doc/html/rfc5545), the format behind the `.ics` file
 
-**Next.js**
+**Validation and security**
 
-- [Authentication guide](https://nextjs.org/docs/app/guides/authentication), [`proxy.ts`](https://nextjs.org/docs/app/api-reference/file-conventions/proxy) and [Data security](https://nextjs.org/docs/app/guides/data-security)
-- [Route Handlers (`route.ts`)](https://nextjs.org/docs/app/api-reference/file-conventions/route) and [`cookies()`](https://nextjs.org/docs/app/api-reference/functions/cookies)
+- [Zod: `.strict()`, `.default()` and `.catch()`](https://zod.dev/api) and [error formatting](https://zod.dev/error-formatting)
+- OWASP: [REST security cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html) and [API security top 10](https://owasp.org/API-Security/)
 
-**Concepts and security**
+**Tools**
 
-- [OAuth 2.0 simplified](https://www.oauth.com/) and [HTTP cookies](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies) (MDN)
-- MDN: [401 Unauthorized](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401) and [403 Forbidden](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403)
-- OWASP: [Broken access control](https://owasp.org/Top10/A01_2021-Broken_Access_Control/), [Authentication cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html), [Session management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html) and [Unvalidated redirects](https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html)
+- [Bruno](https://www.usebruno.com/) and [Postman](https://www.postman.com/) (API clients), and the [`curl` manual](https://curl.se/docs/manpage.html)
 
 **Previous classes**
 
-- [Class 06 README](../class_06_forms/README.md): forms and Server Actions (the checklist for every action)
-- [Class 03 README](../class_03_db/README.md): PostgreSQL, Drizzle and migrations
+- [Class 07 README](../class_07_auth/README.md): authentication, ticket reservation, error pages and the `.ics` route
+- [Class 06 README](../class_06_forms/README.md): Server Actions and their security checklist
+- [Class 04 README](../class_04_routing/README.md): the queries layer and `searchEvents`

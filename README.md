@@ -228,7 +228,8 @@ In-class examples and exercises are organized by session (e.g. `class_01_intro/`
 | [03 — Database](./class_03_db) | PostgreSQL (install on Mac/Windows or Docker), Drizzle ORM schema, migrations, connection string |
 | [04 — Routing & Search](./class_04_routing) | Seeding with faker, queries layer, dynamic route `[slug]`, nested layout, search params (URL as state), Zod |
 | [06 — Forms & Server Actions](./class_06_forms) | Forms, Server Actions (`useActionState`, `useFormStatus`, Zod validation, redirect/revalidate), ticketing tables, route groups, filters and pagination, Suspense + skeleton, the organizer dashboard |
-| [07 — Authentication & Authorization](./class_07_auth) | Sessions and cookies, OAuth with GitHub, Better Auth setup step by step, roles, guards (proxy, page, action, query), getting the GitHub credentials |
+| [07 — Authentication & Authorization](./class_07_auth) | Sessions and cookies, OAuth with GitHub, Better Auth setup step by step, roles, guards (proxy, page, action, query), getting the GitHub credentials, ticket reservation (transaction + row lock, optimistic UI), error pages, the calendar download |
+| [08 — Route Handlers & a Public API](./class_08_apis) | Route Handlers (`route.ts`), a JSON API with strict validation, a whitelist of public fields, one error format, pagination, testing with curl, API security |
 
 To run any of them:
 

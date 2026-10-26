@@ -1,6 +1,6 @@
 # Gatherly — class 07 snapshot: authentication and authorization
 
-The course application in class 7: people can **sign in with GitHub** (Better Auth), the server remembers them with a **session**, the header shows who is signed in, and `/dashboard` is guarded by **role**. The old `users` table was replaced by Better Auth's `user` table. Some checks are still missing (the create-event form, a query, a page): they're listed in the class README.
+The course application in class 7: people can **sign in with GitHub** (Better Auth), the server remembers them with a **session**, the header shows who is signed in, and `/dashboard` is guarded by **role**. The old `users` table was replaced by Better Auth's `user` table. Signed-in attendees can also **reserve tickets** (a transaction with a row lock, and an optimistic button), the app has **error pages**, and each event offers an **"Add to calendar"** download. Some checks are still missing (the create-event form, a query, a page): they're listed in the class README.
 
 > 📘 **What's new and why?** The full explanation (sessions, OAuth, roles, how Better Auth was set up step by step, **how to get the GitHub credentials for `.env`**), run instructions, known issues and exercises are in the **[class 07 README](../README.md)**. Forms and Server Actions are in the **[class 06 README](../../class_06_forms/README.md)**, and PostgreSQL setup in the **[class 03 README](../../class_03_db/README.md)**.
 
@@ -13,6 +13,8 @@ The course application in class 7: people can **sign in with GitHub** (Better Au
 | [/dashboard](http://localhost:3000/dashboard)         | `app/(dashboard)/dashboard/page.tsx`              | **organizers and admins** (`requireOrganizer`) |
 | [/dashboard/events/new](http://localhost:3000/dashboard/events/new) | `app/(dashboard)/dashboard/events/new/page.tsx` | meant for organizers, ⚠️ **not guarded yet** |
 | `/api/auth/*`                                         | `app/api/auth/[...all]/route.ts`                  | Better Auth's own endpoints (sign-in, sign-out, GitHub callback) |
+| `/events/[slug]` (tickets part)                       | `.../events/[slug]/_components/`, `app/actions/tickets.ts` | anyone sees availability; **signing in is needed to reserve** |
+| `/api/events/[slug]/calendar.ics`                     | `app/api/events/[slug]/calendar.ics/route.ts`     | everyone (a calendar file download)  |
 
 > ⚠️ A few things are unfinished in this snapshot: the create-event form still uses the old demo organizer, the dashboard query ignores the owner, and two files claim the home page. Each one is listed with its fix in the *Known issues* of the [class 07 README](../README.md).
 
@@ -61,11 +63,15 @@ gatherly/
 │   │   ├── organizers-only/    ← NEW: the "403" page for signed-in attendees
 │   │   ├── _components/        ← NEW: auth.form.tsx (GitHub button), safe-next.ts (open-redirect guard)
 │   │   ├── about/, events/     ← events: filters, search, pagination, details (see class 4 and 6)
+│   │   ├── events/error.tsx    ← NEW: the error page for /events and everything below it
+│   │   ├── events/[slug]/_components/  ← NEW: tickets-list, reserve-button (optimistic), your-tickets, skeleton
 │   │   └── ...
 │   └── (dashboard)/            ← route group: the organizer area
 │       ├── layout.tsx          ← sidebar
 │       └── dashboard/          ← "/dashboard" (guarded by requireOrganizer) and events/new (the form)
 ├── app/actions/events.ts       ← Server Action `createEvent` (still the demo organizer ⚠️)
+├── app/actions/tickets.ts      ← NEW: Server Action `reserveTicket` (transaction + row lock against overselling)
+├── app/global-error.tsx        ← NEW: the last-resort error page (replaces the root layout)
 ├── components/
 │   ├── account-menu.tsx        ← NEW (client): Sign in, or name + Dashboard + Sign out (useSession)
 │   ├── header.tsx              ← renders <AccountMenu />
@@ -76,13 +82,14 @@ gatherly/
 │   ├── auth-schema.ts          ← NEW: the auth tables (user, session, account, verification)
 │   ├── schema.ts               ← our tables; `events.organizerId` and `orders.userId` now point at the auth `user`
 │   ├── index.ts                ← the `db` client (server-only)
-│   ├── queries/                ← events.ts, dashboard.ts (⚠️ ignores the owner)
+│   ├── queries/                ← events.ts, dashboard.ts (⚠️ ignores the owner), tickets.ts (NEW: availability)
 │   ├── demo-users.ts           ← OBSOLETE (the old "pretend login"; delete it once actions use the session)
 │   └── seed.ts                 ← resets and fills the database (inserts `user` rows, no passwords)
 ├── lib/
 │   ├── auth-client.ts          ← NEW: the browser-side auth client (signIn, signOut, useSession)
 │   ├── session.ts              ← NEW: getCurrentUser, requireUser, requireOrganizer: the server-side guards
 │   ├── roles.ts                ← NEW: parseRole, canManageEvents
+│   ├── ics.ts                  ← NEW: builds the iCalendar (.ics) text
 │   ├── event-filters.ts, format.ts, utils.ts
 ├── types/role.ts               ← NEW: 'attendee' | 'organizer' | 'admin'
 ├── drizzle/                    ← migrations. 0004 adds the auth tables and replaces `users`

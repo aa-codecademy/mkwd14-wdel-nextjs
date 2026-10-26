@@ -4,6 +4,8 @@
 
 **Estimated time:** 8–10 hours · **Deadline:** none, but the sooner you start, the better · **Uses:** everything from classes 1–7, especially authentication and authorization (class 7)
 
+> 🏁 **This is the last homework of the course.** It brings together everything you've built so far: the database, forms and Server Actions, and now accounts and permissions.
+
 Same kind of homework as the first two. It describes **what** the app must do. **How** you build it is up to you: the data model, the file structure, the components and the guards are your decisions. The one fixed choice is the tool: use **Better Auth**, as in class 7. Look back at the [class 07 README](../class_07_auth/README.md) for how it works.
 
 ---

@@ -1,3 +1,5 @@
+// The loading placeholder for <TicketsList>, shown by the <Suspense> on the event page. It keeps the
+// real heading and only greys out the list, and its height is close to the real list's to avoid a jump.
 import { Skeleton } from '../../../../../components/ui/skeleton';
 
 export function TicketListSkeleton() {

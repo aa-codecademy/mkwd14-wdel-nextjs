@@ -6,7 +6,7 @@ Each homework has its own file here, added after the class it belongs to (`hmw_1
 | ----------------------------------- | -------------------------------------------------- | ----------- |
 | [Homework 1](./hmw_1.md)            | 🎲 A Wordle-style word game (a standalone project)  | 4           |
 | [Homework 2](./hmw_2.md)            | 🎲 Word game, part 2: forms and Server Actions (continues homework 1) | 6 |
-| [Homework 3](./hmw_3.md)            | 🎲 Word game, part 3: authentication and authorization (continues homework 2) | 7 |
+| [Homework 3](./hmw_3.md)            | 🎲 Word game, part 3: authentication and authorization (continues homework 2). **The last one** | 7 |
 
 ## How to submit
 
