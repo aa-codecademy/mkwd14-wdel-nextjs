@@ -1,4 +1,5 @@
 ALTER TABLE "orders" ALTER COLUMN "status" SET DATA TYPE text;--> statement-breakpoint
+UPDATE "orders" SET "status" = 'cancelled' WHERE "status" = 'canceled';--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "status" SET DEFAULT 'pending'::text;--> statement-breakpoint
 DROP TYPE "public"."order_status";--> statement-breakpoint
 CREATE TYPE "public"."order_status" AS ENUM('pending', 'paid', 'refunded', 'cancelled');--> statement-breakpoint

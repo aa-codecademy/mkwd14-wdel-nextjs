@@ -78,42 +78,46 @@ export async function getEventFormOptions() {
 // Path: ticket -> its ticket type -> its event, and ticket -> its order. A ticket doesn't know its event
 // directly, so we JOIN through ticket_types. `limit = 10` is a default parameter: a panel needs a handful, not all.
 export async function getRecentAttendees(organizerId: string, limit = 10) {
-  return db
-    .select({
-      ticketId: tickets.id,
-      attendee: tickets.attendeeName,
-      eventTitle: events.title,
-      ticketType: ticketTypes.name,
-    })
-    .from(tickets)
-    .innerJoin(ticketTypes, eq(ticketTypes.id, tickets.ticketTypeId))
-    .innerJoin(events, eq(events.id, ticketTypes.eventId))
-    .innerJoin(orders, eq(orders.id, tickets.orderId))
-    // Owner AND paid: someone with an unpaid reservation isn't an attendee yet.
-    .where(and(eq(events.organizerId, organizerId), eq(orders.status, 'paid')))
-    .orderBy(desc(orders.createdAt))
-    .limit(limit);
+  return (
+    db
+      .select({
+        ticketId: tickets.id,
+        attendee: tickets.attendeeName,
+        eventTitle: events.title,
+        ticketType: ticketTypes.name,
+      })
+      .from(tickets)
+      .innerJoin(ticketTypes, eq(ticketTypes.id, tickets.ticketTypeId))
+      .innerJoin(events, eq(events.id, ticketTypes.eventId))
+      .innerJoin(orders, eq(orders.id, tickets.orderId))
+      // Owner AND paid: someone with an unpaid reservation isn't an attendee yet.
+      .where(and(eq(events.organizerId, organizerId), eq(orders.status, 'paid')))
+      .orderBy(desc(orders.createdAt))
+      .limit(limit)
+  );
 }
 
 // The latest orders on this organizer's events, with the buyer's name (feeds the @orders panel).
 export async function getRecentOrders(organizerId: string, limit = 10) {
-  return db
-    .select({
-      id: orders.id,
-      createdAt: orders.createdAt,
-      status: orders.status,
-      // Renamed on the way out: the column is `totalCent` (singular), the panel reads `totalCents`.
-      totalCents: orders.totalCent,
-      eventTitle: events.title,
-      buyer: user.name,
-    })
-    .from(orders)
-    // INNER JOIN: an order always has a buyer and an event, so no rows are lost.
-    .innerJoin(events, eq(events.id, orders.eventId))
-    .innerJoin(user, eq(user.id, orders.userId))
-    .where(eq(events.organizerId, organizerId))
-    .orderBy(desc(orders.createdAt))
-    .limit(limit);
+  return (
+    db
+      .select({
+        id: orders.id,
+        createdAt: orders.createdAt,
+        status: orders.status,
+        // Renamed on the way out: the column is `totalCent` (singular), the panel reads `totalCents`.
+        totalCents: orders.totalCent,
+        eventTitle: events.title,
+        buyer: user.name,
+      })
+      .from(orders)
+      // INNER JOIN: an order always has a buyer and an event, so no rows are lost.
+      .innerJoin(events, eq(events.id, orders.eventId))
+      .innerJoin(user, eq(user.id, orders.userId))
+      .where(eq(events.organizerId, organizerId))
+      .orderBy(desc(orders.createdAt))
+      .limit(limit)
+  );
 }
 
 // The numbers for the tiles on top of the dashboard (feeds the @stats panel): how many events are published or

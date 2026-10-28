@@ -11,9 +11,9 @@ We'll use **[Vercel](https://vercel.com/)** (the company that makes Next.js) to 
 
 ## 📁 What's in this folder
 
-| Folder                    | What it is                                                                                          |
-| ------------------------- | --------------------------------------------------------------------------------------------------- |
-| [`gatherly/`](./gatherly) | The finished Gatherly app, ready to deploy (or to use as the model for your own project)             |
+| Folder                    | What it is                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| [`gatherly/`](./gatherly) | The finished Gatherly app, ready to deploy (or to use as the model for your own project) |
 
 ---
 
@@ -23,15 +23,15 @@ We'll use **[Vercel](https://vercel.com/)** (the company that makes Next.js) to 
 
 Everything that "just worked" on your laptop was quietly depending on your machine. In production, **none of that exists**:
 
-| | **On your laptop** (development) | **On Vercel** (production) |
-| --- | --- | --- |
-| How the app runs | `npm run dev`: a dev server that recompiles on every save | `npm run build` **once**, then the built app serves requests |
-| Where | Your computer, while the terminal is open | Vercel's servers, always on |
-| The address | `http://localhost:3000` | `https://your-project.vercel.app` (HTTPS, automatic) |
-| The database | PostgreSQL on `localhost` | A **hosted** Postgres on the internet |
-| Environment variables | Your `.env` file | **Project settings** on Vercel (the `.env` file is never uploaded) |
-| Errors | A red overlay in the browser | A log you have to go and read |
-| Who can reach it | Only you | Everyone |
+|                       | **On your laptop** (development)                          | **On Vercel** (production)                                         |
+| --------------------- | --------------------------------------------------------- | ------------------------------------------------------------------ |
+| How the app runs      | `npm run dev`: a dev server that recompiles on every save | `npm run build` **once**, then the built app serves requests       |
+| Where                 | Your computer, while the terminal is open                 | Vercel's servers, always on                                        |
+| The address           | `http://localhost:3000`                                   | `https://your-project.vercel.app` (HTTPS, automatic)               |
+| The database          | PostgreSQL on `localhost`                                 | A **hosted** Postgres on the internet                              |
+| Environment variables | Your `.env` file                                          | **Project settings** on Vercel (the `.env` file is never uploaded) |
+| Errors                | A red overlay in the browser                              | A log you have to go and read                                      |
+| Who can reach it      | Only you                                                  | Everyone                                                           |
 
 That last row changes how you think: **production code is attacked and used by strangers.** Everything from classes 6 to 9 (validation, authorization, ownership) matters now.
 
@@ -59,11 +59,11 @@ Two consequences you'll meet today:
 
 Vercel has more than one kind of deployment:
 
-| Environment      | Created when...                                                  | URL                                         |
-| ---------------- | ---------------------------------------------------------------- | ------------------------------------------- |
-| **Production**   | you push to the **production branch** (usually `main`)           | `your-project.vercel.app` (and your domain) |
-| **Preview**      | you push to **any other branch** or open a pull request          | a unique URL per deployment                 |
-| **Development**  | not a deployment: it's the set of variables you pull to your laptop | `localhost`                              |
+| Environment     | Created when...                                                     | URL                                         |
+| --------------- | ------------------------------------------------------------------- | ------------------------------------------- |
+| **Production**  | you push to the **production branch** (usually `main`)              | `your-project.vercel.app` (and your domain) |
+| **Preview**     | you push to **any other branch** or open a pull request             | a unique URL per deployment                 |
+| **Development** | not a deployment: it's the set of variables you pull to your laptop | `localhost`                                 |
 
 Every environment can have **different environment variables**. This is how production uses the production database while a preview doesn't.
 
@@ -75,15 +75,15 @@ You may read old tutorials about **Vercel Postgres**. It **no longer exists for 
 
 The code you deploy has more features than the class 9 snapshot. Each file is commented, so read it in this order:
 
-| Feature | Where | How it works |
-| ------- | ----- | ------------ |
-| **Check-in** | `/dashboard/check-in`, `app/actions/check-in.ts`, `lib/check-in.ts` | An organizer types a ticket code. The action re-checks the session and role, then `lib/check-in.ts` answers 404 (unknown code), 403 (another organizer's event), 422 (order not paid) or 409 (already checked in). Otherwise it inserts a row in `check_ins`. A **unique index on `ticket_id`** plus `onConflictDoNothing()` lets the database decide the winner when two scanners race |
-| **Scanner API tokens** | the dashboard, `app/actions/api-tokens.ts`, `lib/api-tokens.ts`, table `api_tokens` | An organizer creates a token for a device (a door tablet). The app stores only a **SHA-256 hash**; the plain token is shown **once**. (The route that would accept the token is not built yet, see 2.2) |
-| **My tickets** | `/my-tickets` | The signed-in user's tickets with status (pending, paid, checked in). The user id comes from the **session**, never from the URL |
-| **Pay (mock)** | `/my-tickets/[orderId]/pay`, `app/actions/orders.ts` | One `UPDATE ... SET status='paid' WHERE id AND user AND status='pending'`: ownership-safe and **idempotent** (paying twice changes nothing). No real payment provider |
-| **Print tickets** | `/my-tickets/print` | Paid tickets only, with `print:hidden` for the toolbar and a small client `window.print()` button |
-| **Publish an event** | `setEventStatus` in `app/actions/events.ts` | One update that filters by id **and** owner (admins skip the owner filter) |
-| **Migrations 0005 and 0006** | `drizzle/` | `0005` adds `api_tokens` and `check_ins`. `0006` renames the order status `canceled` to `cancelled`. Postgres can't rename an enum value in place, so it recreates the type. ⚠️ it **fails on a live row that still holds `canceled`**, so on a database with real data fix those rows first |
+| Feature                      | Where                                                                               | How it works                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Check-in**                 | `/dashboard/check-in`, `app/actions/check-in.ts`, `lib/check-in.ts`                 | An organizer types a ticket code. The action re-checks the session and role, then `lib/check-in.ts` answers 404 (unknown code), 403 (another organizer's event), 422 (order not paid) or 409 (already checked in). Otherwise it inserts a row in `check_ins`. A **unique index on `ticket_id`** plus `onConflictDoNothing()` lets the database decide the winner when two scanners race |
+| **Scanner API tokens**       | the dashboard, `app/actions/api-tokens.ts`, `lib/api-tokens.ts`, table `api_tokens` | An organizer creates a token for a device (a door tablet). The app stores only a **SHA-256 hash**; the plain token is shown **once**. (No route accepts the token yet, see 2.2)                                                                                                                                                                                                         |
+| **My tickets**               | `/my-tickets`                                                                       | The signed-in user's tickets with status (pending, paid, checked in). The user id comes from the **session**, never from the URL                                                                                                                                                                                                                                                        |
+| **Pay (mock)**               | `/my-tickets/[orderId]/pay`, `app/actions/orders.ts`                                | One `UPDATE ... SET status='paid' WHERE id AND user AND status='pending'`: ownership-safe and **idempotent** (paying twice changes nothing). No real payment provider                                                                                                                                                                                                                   |
+| **Print tickets**            | `/my-tickets/print`                                                                 | Paid tickets only, with `print:hidden` for the toolbar and a small client `window.print()` button                                                                                                                                                                                                                                                                                       |
+| **Publish an event**         | `setEventStatus` in `app/actions/events.ts`                                         | One update that filters by id **and** owner (admins skip the owner filter)                                                                                                                                                                                                                                                                                                              |
+| **Migrations 0005 and 0006** | `drizzle/`                                                                          | `0005` adds `api_tokens` and `check_ins`. `0006` renames the order status `canceled` to `cancelled`. Postgres can't rename an enum value in place, so it recreates the type. ⚠️ it **fails on a live row that still holds `canceled`**, so on a database with real data fix those rows first                                                                                            |
 
 ---
 
@@ -95,38 +95,39 @@ Work through this **in order**, on your laptop. Every item is something that has
 
 Run these from the app folder (`class_10_deployment/gatherly`, or your own project root):
 
-| # | Command | What it proves | If it fails |
-| - | ------- | -------------- | ----------- |
-| 1 | `git status` | Everything you want to deploy is **committed** (Vercel builds from Git, not from your folder) | Commit or stash |
-| 2 | `rm -rf node_modules && npm ci` | A **clean install** from `package-lock.json` works, like on Vercel's fresh machine (Windows PowerShell: `Remove-Item -Recurse -Force node_modules; npm ci`) | Fix the lockfile: `npm install`, commit `package-lock.json` |
-| 3 | `npm run typecheck` | The code type-checks | Fix the type errors |
-| 4 | `npm run lint` | No ESLint errors | Fix them (warnings are allowed) |
-| 5 | `npm run format:check` | Prettier agrees with the code style | `npm run format`, review, commit |
-| 6 | `npm run build` | **The same command Vercel runs**: it migrates the database, then builds. Needs a running local database (see 2.3). The single most important check | Read the error |
-| 7 | `npm run start` | The production build **actually serves pages** (needs your local database) | Open `http://localhost:3000` and click around |
+| #   | Command                         | What it proves                                                                                                                                              | If it fails                                                 |
+| --- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 1   | `git status`                    | Everything you want to deploy is **committed** (Vercel builds from Git, not from your folder)                                                               | Commit or stash                                             |
+| 2   | `rm -rf node_modules && npm ci` | A **clean install** from `package-lock.json` works, like on Vercel's fresh machine (Windows PowerShell: `Remove-Item -Recurse -Force node_modules; npm ci`) | Fix the lockfile: `npm install`, commit `package-lock.json` |
+| 3   | `npm run typecheck`             | The code type-checks                                                                                                                                        | Fix the type errors                                         |
+| 4   | `npm run lint`                  | No ESLint errors                                                                                                                                            | Fix them (warnings are allowed)                             |
+| 5   | `npm run format:check`          | Prettier agrees with the code style                                                                                                                         | `npm run format`, review, commit                            |
+| 6   | `npm run build`                 | **The same command Vercel runs**: it migrates the database, then builds. Needs a running local database (see 2.3). The single most important check          | Read the error                                              |
+| 7   | `npm run start`                 | The production build **actually serves pages** (needs your local database)                                                                                  | Open `http://localhost:3000` and click around               |
 
 Steps 3 to 5 are what `npm run check` does in one go. **Step 6 is the one that matters most**: if it passes locally with the right variables, it will pass on Vercel (same Node, same commands, same lockfile).
 
 > 💡 **Read the route table at the end of `npm run build`.** It tells you what Next.js decided for each route:
 > `○` **Static** = prerendered once at build time. `ƒ` **Dynamic** = rendered on every request.
-> A page that **reads the database but shows as `○` Static** is a red flag: its data is frozen at build time (see 2.2, #3).
+> A page that **reads the database but shows as `○` Static** is a red flag: its data is frozen at build time (see the lesson in 2.2).
 
-## 2.2 Known issues in this snapshot
+## 2.2 What the checks found (and what we fixed)
 
-`npm run typecheck`, `npm run lint` and `npm run build` pass (we ran the build against an empty local database: migrations ran, then the build finished). **The code can be deployed as it is.** But the checks find these things, and a real review would fix them before going live:
+We ran the quality gates on the app before deploying it. `typecheck`, `lint` and `build` passed, but a real review found the problems below. **All of them are fixed in this folder**, and each is a mistake you can make in your own project, so read the table:
 
-| # | What | Why it matters | The fix |
-| - | ---- | -------------- | ------- |
-| 1 | `npm run format:check` fails: *Code style issues found in 24 files* | `npm run check` ends with this step, so **the quality gate is red** | `npm run format`, **read the diff**, commit it |
-| 2 | `lib/api-tokens.ts` has a `console.log` that prints the **plain scanner token** | Tokens are stored hashed on purpose. Logging the plain value puts a **secret in your production logs**, which defeats that | Delete the `console.log` line |
-| 3 | `/dashboard/events/new` shows as `○` **Static** in the build's route table | It reads venues and categories from the database but uses no cookies, so it is **prerendered at build time**. On the first production deploy the database is still empty, so the form would show **no venues and no categories** until the next deploy | Guard the page with `await requireOrganizer('/dashboard/events/new')` (reads the session cookie, so the page becomes dynamic, and it is the missing authorization check too) |
-| 4 | `logger: true` in `db/index.ts` | Prints **every SQL query with its values** to the logs | Remove it, or make it conditional on `NODE_ENV !== 'production'` |
-| 5 | `createEvent` checks that someone is signed in, **not their role** | A signed-in attendee could call the action directly | Use `requireOrganizer` in the action |
-| 6 | `types/gatherly-event.ts` is dead code | It uses a type named `Event`, which resolves to the **browser's DOM type**, so it compiles but means nothing | Delete the file |
-| 7 | `apiError` returns HTTP 200 with the status inside the JSON body, and the new `check-in` comment refers to an `/api/check-in` route that doesn't exist yet | The scanner tokens can be created but nothing accepts them | Next feature, not a deploy blocker |
-| 8 | A **pending** order keeps its seat forever (no expiry) | Unpaid orders can block sales | Add an expiry job later |
+| #   | What the checks found                                                                             | Why it matters                                                                                                                                                                                                             | The fix (already applied)                                                                                                                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `npm run format:check` failed: _Code style issues found in 24 files_                              | `npm run check` ends with this step, so the **quality gate was red**                                                                                                                                                       | `npm run format`, then read the diff                                                                                                                                                                                                            |
+| 2   | `lib/api-tokens.ts` had a `console.log` that printed the **plain scanner token**                  | Tokens are stored hashed on purpose. Logging the plain value puts a **secret in your production logs**                                                                                                                     | Deleted the line                                                                                                                                                                                                                                |
+| 3   | `/dashboard/events/new` showed as `○` **Static** in the build's route table                       | It read venues and categories from the database but used no cookies, so it was **prerendered at build time**. On the first production deploy the database is empty, so the form would have **no venues and no categories** | The page now calls `requireOrganizer('/dashboard/events/new')`. That reads the session cookie, so the route is now `ƒ` Dynamic, and it is the missing authorization check too                                                                   |
+| 4   | `logger: true` in `db/index.ts`                                                                   | Printed **every SQL query with its values** to the logs                                                                                                                                                                    | Now `process.env.NODE_ENV !== 'production'`                                                                                                                                                                                                     |
+| 5   | `createEvent` only checked that someone was signed in, **not their role**                         | A signed-in attendee could call the action directly                                                                                                                                                                        | The action now also requires `canManageEvents(role)`                                                                                                                                                                                            |
+| 6   | `types/gatherly-event.ts` was dead code (its `Event` type resolved to the **browser's DOM type**) | It compiled but meant nothing                                                                                                                                                                                              | Deleted the file                                                                                                                                                                                                                                |
+| 7   | Migration `0006` would **fail on a live row** that still had the old `canceled` status            | Postgres can't rename an enum value in place, so the migration casts the column to text and back                                                                                                                           | Added `UPDATE "orders" SET status = 'cancelled' WHERE status = 'canceled'` between the two casts. (We normally never edit a migration, but this one was only fixed _before_ anyone had live data: a database that already ran it is unaffected) |
 
-> 🧠 **The lesson of #3:** *any page that touches the database and does not read cookies, headers or search params is prerendered at build time.* That is great for a blog (fast, cached) and a bug for anything that must be fresh. Always read the `○ / ƒ` table at the end of `npm run build`.
+**Not fixed, because they are missing features, not deployment problems:** `apiError` still returns HTTP 200 with the status in the JSON body; the scanner tokens can be created but no `/api/check-in` route accepts them yet (and nothing revokes them); a **pending order keeps its seat forever** (no expiry); `payOrder` redirects silently when nothing matches. Good ideas for your own next steps.
+
+> 🧠 **The lesson of #3:** _any page that touches the database and does not read cookies, headers or search params is prerendered at build time._ That is great for a blog (fast, cached) and a bug for anything that must be fresh. Always read the `○ / ƒ` table at the end of `npm run build`.
 
 > 🧠 **The lesson of #2:** a secret you hash before storing is only safe if you never log it before hashing. Search your code for `console.log` before every deploy.
 
@@ -134,11 +135,11 @@ Steps 3 to 5 are what `npm run check` does in one go. **Step 6 is the one that m
 
 Because `npm run build` runs the migrations first, the build needs a **working database**, not just a variable. Try it with **no** environment variables:
 
-| Missing | The error | Where |
-| ------- | --------- | ----- |
-| `DATABASE_URL` | `DATABASE_URL is not set` | `drizzle.config.ts` (the migration step) and `db/index.ts` |
-| a reachable database | a connection error from `drizzle-kit migrate` | the migration step, **before** `next build` even starts |
-| `BETTER_AUTH_SECRET` | `You are using the default secret` | Better Auth, while Next.js collects page data |
+| Missing              | The error                                     | Where                                                      |
+| -------------------- | --------------------------------------------- | ---------------------------------------------------------- |
+| `DATABASE_URL`       | `DATABASE_URL is not set`                     | `drizzle.config.ts` (the migration step) and `db/index.ts` |
+| a reachable database | a connection error from `drizzle-kit migrate` | the migration step, **before** `next build` even starts    |
+| `BETTER_AUTH_SECRET` | `You are using the default secret`            | Better Auth, while Next.js collects page data              |
 
 So, unlike a project without a build-time migration, **a placeholder `DATABASE_URL` no longer works**: the first build needs the real one. To test the full build locally, use **your local PostgreSQL** (it must be running; an **empty** database is fine because the migrations create the tables):
 
@@ -152,48 +153,48 @@ dropdb gatherly_build_test            # clean up
 
 (Windows PowerShell: set `$env:DATABASE_URL=...` and `$env:BETTER_AUTH_SECRET=...` first. Use your own user/password in the URL, as in your `.env`.)
 
-You'll also see a **warning**: *Base URL is not set*. In production that matters, and we fix it with `BETTER_AUTH_URL` in Part 5.
+You'll also see a **warning**: _Base URL is not set_. In production that matters, and we fix it with `BETTER_AUTH_URL` in Part 5.
 
 ## 2.4 Secrets and configuration
 
-| ☐ | Check | How |
-| - | ----- | --- |
-| ☐ | **No secret is in Git.** Only `.env.example` is tracked | `git ls-files \| grep -E "(^\|/)\.env"` must print **only** `.env.example` |
-| ☐ | **`.env.local` and `.env.*.local` are ignored.** `vercel env pull` writes a local env file, and the original `.gitignore` only ignored `.env` | Already fixed in this folder's `.gitignore`. Check your own project |
-| ☐ | **`.env.example` lists every variable** the app reads (with **empty** values) | Compare it with the table in [Part 5](#part-5--environment-variables-reference) |
-| ☐ | **No hard-coded secrets or URLs** in the code | Search for `localhost`, `password`, `secret`, `sk_`, `ghp_` |
-| ☐ | **A NEW `BETTER_AUTH_SECRET` for production.** Never reuse the local one | Generate it: `npx auth@latest secret` or `openssl rand -base64 32` |
-| ☐ | **A separate GitHub OAuth app for production** (its own client id, secret and callback URL) | [Part 4, step 7](#step-7--github-sign-in-for-production) |
-| ☐ | If a secret was **ever** committed, treat it as **burned**: create a new one. Deleting the file later doesn't un-leak it | |
+| ☐   | Check                                                                                                                                         | How                                                                             |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| ☐   | **No secret is in Git.** Only `.env.example` is tracked                                                                                       | `git ls-files \| grep -E "(^\|/)\.env"` must print **only** `.env.example`      |
+| ☐   | **`.env.local` and `.env.*.local` are ignored.** `vercel env pull` writes a local env file, and the original `.gitignore` only ignored `.env` | Already fixed in this folder's `.gitignore`. Check your own project             |
+| ☐   | **`.env.example` lists every variable** the app reads (with **empty** values)                                                                 | Compare it with the table in [Part 5](#part-5--environment-variables-reference) |
+| ☐   | **No hard-coded secrets or URLs** in the code                                                                                                 | Search for `localhost`, `password`, `secret`, `sk_`, `ghp_`                     |
+| ☐   | **A NEW `BETTER_AUTH_SECRET` for production.** Never reuse the local one                                                                      | Generate it: `npx auth@latest secret` or `openssl rand -base64 32`              |
+| ☐   | **A separate GitHub OAuth app for production** (its own client id, secret and callback URL)                                                   | [Part 4, step 7](#step-7--github-sign-in-for-production)                        |
+| ☐   | If a secret was **ever** committed, treat it as **burned**: create a new one. Deleting the file later doesn't un-leak it                      |                                                                                 |
 
 ## 2.5 App settings that behave differently in production
 
-| ☐ | Check | Why |
-| - | ----- | --- |
-| ☐ | `BETTER_AUTH_URL` is planned (your production URL) | Without it Better Auth guesses the origin from each request, and sign-in redirects can break |
-| ☐ | **Every image host is in `next.config.ts` → `images.remotePatterns`** | Next.js refuses to optimise images from unlisted hosts (a broken image with a 400). Ours lists `images.unsplash.com`, `picsum.photos` and `loremflickr.com` |
-| ☐ | **File names match their imports exactly**, including capital letters | macOS and Windows ignore case; **Vercel's Linux doesn't**. `./EventCard` vs `./event-card` builds on your laptop and fails there |
-| ☐ | **No leftover `console.log`** (and no sensitive data in logs) | Production logs are shared and searchable |
-| ☐ | **`logger: true` in `db/index.ts`** prints **every SQL query** (with values) to the logs. Turn it off for production, or make it conditional on `NODE_ENV` | Noisy, and it can expose personal data |
-| ☐ | Node version: `package.json` says `"engines": { "node": ">=20.9" }` ✅. Vercel also has a **Node.js Version** setting in the project | Match what you developed with |
-| ☐ | Fonts and images come from `next/font` and `next/image` | Both are optimised automatically on Vercel |
+| ☐   | Check                                                                                                                                | Why                                                                                                                                                         |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ☐   | `BETTER_AUTH_URL` is planned (your production URL)                                                                                   | Without it Better Auth guesses the origin from each request, and sign-in redirects can break                                                                |
+| ☐   | **Every image host is in `next.config.ts` → `images.remotePatterns`**                                                                | Next.js refuses to optimise images from unlisted hosts (a broken image with a 400). Ours lists `images.unsplash.com`, `picsum.photos` and `loremflickr.com` |
+| ☐   | **File names match their imports exactly**, including capital letters                                                                | macOS and Windows ignore case; **Vercel's Linux doesn't**. `./EventCard` vs `./event-card` builds on your laptop and fails there                            |
+| ☐   | **No leftover `console.log`** (and no sensitive data in logs)                                                                        | Production logs are shared and searchable                                                                                                                   |
+| ☐   | **SQL logging**: `logger` in `db/index.ts` must be off in production (ours is: `NODE_ENV !== 'production'`)                          | Every query, with its values, would be in the logs                                                                                                          |
+| ☐   | Node version: `package.json` says `"engines": { "node": ">=20.9" }` ✅. Vercel also has a **Node.js Version** setting in the project | Match what you developed with                                                                                                                               |
+| ☐   | Fonts and images come from `next/font` and `next/image`                                                                              | Both are optimised automatically on Vercel                                                                                                                  |
 
 ## 2.6 The database
 
-| ☐ | Check | Why |
-| - | ----- | --- |
-| ☐ | The **`drizzle/` folder is committed** (`0000` to `0006`), and no migration was ever edited by hand | The production database is built from these files |
-| ☐ | You know that **every deploy runs `db:migrate`** (it's part of `npm run build`) | New migrations reach production **automatically** when you push, and a failing migration **fails the build** (the old version stays live) |
-| ☐ | Migration `0006` and live data: no row still holds the old `canceled` status | Otherwise the migration fails |
-| ☐ | You understand that **`npm run db:seed` deletes everything first** | Fine **once** on an empty production database for demo data. **Never** on one with real users |
+| ☐   | Check                                                                                               | Why                                                                                                                                       |
+| --- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| ☐   | The **`drizzle/` folder is committed** (`0000` to `0006`), and no migration was ever edited by hand | The production database is built from these files                                                                                         |
+| ☐   | You know that **every deploy runs `db:migrate`** (it's part of `npm run build`)                     | New migrations reach production **automatically** when you push, and a failing migration **fails the build** (the old version stays live) |
+| ☐   | Migration `0006` and live data: no row still holds the old `canceled` status                        | Otherwise the migration fails                                                                                                             |
+| ☐   | You understand that **`npm run db:seed` deletes everything first**                                  | Fine **once** on an empty production database for demo data. **Never** on one with real users                                             |
 
 ## 2.7 Git and the repository
 
-| ☐ | Check | Why |
-| - | ----- | --- |
-| ☐ | The code is pushed to **GitHub** (or GitLab / Bitbucket) on the branch you'll use as production (`main`) | Vercel deploys from Git |
-| ☐ | `package-lock.json` is committed | Reproducible installs |
-| ☐ | You know **where the app lives in the repo** | In this course repo it's in a **subfolder** (`class_10_deployment/gatherly`), so Vercel needs the **Root Directory** setting. If your app is at the root of its own repo, you don't |
+| ☐   | Check                                                                                                    | Why                                                                                                                                                                                 |
+| --- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ☐   | The code is pushed to **GitHub** (or GitLab / Bitbucket) on the branch you'll use as production (`main`) | Vercel deploys from Git                                                                                                                                                             |
+| ☐   | `package-lock.json` is committed                                                                         | Reproducible installs                                                                                                                                                               |
+| ☐   | You know **where the app lives in the repo**                                                             | In this course repo it's in a **subfolder** (`class_10_deployment/gatherly`), so Vercel needs the **Root Directory** setting. If your app is at the root of its own repo, you don't |
 
 ## 2.8 The printable version
 
@@ -223,12 +224,12 @@ A **Neon Postgres database** that Vercel provisions and bills, and **injects int
 
 When you connect the database, Vercel adds these to your project:
 
-| Variable                | What it is                                                                              | Use it for |
-| ----------------------- | --------------------------------------------------------------------------------------- | ---------- |
-| `DATABASE_URL`          | The **pooled** connection string (goes through **PgBouncer**, a connection pooler)     | **The running app** |
-| `DATABASE_URL_UNPOOLED` | The **direct** connection string                                                        | **Migrations and the seed** (Drizzle Kit) |
-| `PGHOST`, `PGHOST_UNPOOLED`, `PGUSER`, `PGDATABASE`, `PGPASSWORD` | The same connection, split into parts       | Custom setups (we don't need them) |
-| `POSTGRES_*`            | Legacy names, for compatibility with old Vercel Postgres templates                      | Ignore |
+| Variable                                                          | What it is                                                                         | Use it for                                |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------- |
+| `DATABASE_URL`                                                    | The **pooled** connection string (goes through **PgBouncer**, a connection pooler) | **The running app**                       |
+| `DATABASE_URL_UNPOOLED`                                           | The **direct** connection string                                                   | **Migrations and the seed** (Drizzle Kit) |
+| `PGHOST`, `PGHOST_UNPOOLED`, `PGUSER`, `PGDATABASE`, `PGPASSWORD` | The same connection, split into parts                                              | Custom setups (we don't need them)        |
+| `POSTGRES_*`                                                      | Legacy names, for compatibility with old Vercel Postgres templates                 | Ignore                                    |
 
 **Why two connection strings?** Serverless functions start and stop all the time, and many run at once. Each opens its own database connection, and PostgreSQL only allows a limited number. A **pooler** sits in between and shares a small number of real connections among many clients, so the app doesn't run out. That's the pooled `DATABASE_URL`. A **migration**, though, runs structural changes (`CREATE TABLE`...) in a transaction and is better done over a **direct** connection. (The general recommendation for migration tools. Neon's page doesn't spell out which to use, so if a migration ever behaves strangely, try the other URL.)
 
@@ -249,6 +250,7 @@ These steps happen **after** you've imported the project into Vercel in Part 4 (
 > 💡 The exact button names change from time to time. If a label differs, look for "Create Database", "Marketplace" and "Connect Project".
 
 **Which environments?** Connect **Production** (and **Development**, if you want `vercel env pull`). For **Preview**, you have a choice:
+
 - **Don't connect it** (simplest): preview deployments build but have no database.
 - **Enable Preview branching:** every preview gets its **own copy-on-write database branch**, so you can test schema changes without touching production. It needs migrations to run for each preview, which is more setup. Skip it for now.
 - **Don't** connect Preview to the **production** database "to make it work". A preview from a half-finished branch would read and write real data.
@@ -285,7 +287,7 @@ This works because `drizzle.config.ts` reads `DATABASE_URL`, and a variable set 
 
 > ⚠️ **This is the production database.** Double-check the host in the URL before running anything. Never paste the URL into a chat, a screenshot or a commit.
 
-**Demo data.** The seed **wipes every table first**: run it **once**, on an empty database. Because `/dashboard/events/new` is prerendered at build time (see 2.2, #3), **redeploy after seeding** so the venue and category lists are not empty (or apply the fix and the redeploy isn't needed). The seeded organizers can't sign in. To use the dashboard on production you promote **your own** account by running this in Neon's SQL Editor:
+**Demo data.** The seed **wipes every table first**: run it **once**, on an empty database. The seeded organizers can't sign in. To use the dashboard on production you promote **your own** account by running this in Neon's SQL Editor:
 
 ```sql
 UPDATE "user" SET role = 'organizer' WHERE email = 'you@example.com';
@@ -332,18 +334,18 @@ Make sure the checklist (Part 2) is **green** first. A deploy of broken code is 
 2. Under **Import Git Repository** find your repo and click **Import**.
 3. On the **Configure Project** screen:
 
-| Setting | What to do |
-| ------- | ---------- |
-| **Project Name** | Becomes your URL (`name.vercel.app`). Pick something short |
-| **Framework Preset** | It should say **Next.js**, detected automatically. Leave it |
-| **Root Directory** | If the app is **not** at the top of the repo (like `class_10_deployment/gatherly` in the course repo), click **Edit** and choose that folder. If it's at the root of your own repo, leave it blank |
-| **Build and Output Settings** | Leave the defaults: for Next.js Vercel uses the `build` script from `package.json` (`next build`) |
-| **Environment Variables** | **Add them now, before the first deploy** (see below) |
+| Setting                       | What to do                                                                                                                                                                                         |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Project Name**              | Becomes your URL (`name.vercel.app`). Pick something short                                                                                                                                         |
+| **Framework Preset**          | It should say **Next.js**, detected automatically. Leave it                                                                                                                                        |
+| **Root Directory**            | If the app is **not** at the top of the repo (like `class_10_deployment/gatherly` in the course repo), click **Edit** and choose that folder. If it's at the root of your own repo, leave it blank |
+| **Build and Output Settings** | Leave the defaults: for Next.js Vercel uses the `build` script from `package.json` (`next build`)                                                                                                  |
+| **Environment Variables**     | **Add them now, before the first deploy** (see below)                                                                                                                                              |
 
 **Environment variables for the first deploy** (remember 2.3):
 
-| Name | Value |
-| ---- | ----- |
+| Name                 | Value                                              |
+| -------------------- | -------------------------------------------------- |
 | `BETTER_AUTH_SECRET` | A **new** random string (`npx auth@latest secret`) |
 
 There is **no database yet**, so this first build **will fail** at the migration step with `DATABASE_URL is not set`. That's expected and it's a good way to practise reading a build log. The next step fixes it.
@@ -367,8 +369,8 @@ Do **Part 3, section 3.3** now:
 
 In **Project → Settings → Environment Variables** add (for **Production**):
 
-| Name | Value |
-| ---- | ----- |
+| Name              | Value                                                                               |
+| ----------------- | ----------------------------------------------------------------------------------- |
 | `BETTER_AUTH_URL` | `https://your-project.vercel.app` (your real production URL, **no trailing slash**) |
 
 (`BETTER_AUTH_SECRET` is already there. The GitHub values come next.)
@@ -379,10 +381,10 @@ In **Project → Settings → Environment Variables** add (for **Production**):
 
 The OAuth app you made in class 7 points at `localhost`. Production needs **its own** app, because a GitHub OAuth app has **one** callback URL. Follow the [class 07 README, Part 2](../class_07_auth/README.md#part-2--getting-the-github-credentials-step-by-step), with these values:
 
-| Field | Value |
-| ----- | ----- |
-| Application name | `Gatherly` |
-| Homepage URL | `https://your-project.vercel.app` |
+| Field                          | Value                                                      |
+| ------------------------------ | ---------------------------------------------------------- |
+| Application name               | `Gatherly`                                                 |
+| Homepage URL                   | `https://your-project.vercel.app`                          |
 | **Authorization callback URL** | `https://your-project.vercel.app/api/auth/callback/github` |
 
 Then add the new **Client ID** and **Client secret** in Vercel as `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` (mark the secret as **Secret**), and **redeploy**.
@@ -393,30 +395,30 @@ Note: preview deployments have **different URLs**, so GitHub sign-in (one callba
 
 After the variables are in, **redeploy** (Deployments → ⋯ → Redeploy). Then, on the **live URL**, go through this:
 
-| ☐ | Test | Expect |
-| - | ---- | ------ |
-| ☐ | Open `/` and `/events` | Events load, images show |
-| ☐ | Filters, search and pagination | They work and the URL changes |
-| ☐ | Open an event, then `/events/<slug>/tickets` | The details page, and the full tickets page |
-| ☐ | Click **Get tickets** on `/events` | The modal opens (class 9) |
-| ☐ | Click **Continue with GitHub** | GitHub asks, you come back signed in, the header shows your name |
-| ☐ | `/dashboard` as an attendee | "The dashboard is for organizers" |
-| ☐ | Promote yourself (SQL in Neon), reload `/dashboard` | The panels load |
-| ☐ | Reserve a ticket | "Reserved" and the number goes down |
-| ☐ | `/api/events` | JSON |
-| ☐ | A made-up URL | The not-found page |
-| ☐ | **Project → Logs** | No unexpected errors |
+| ☐   | Test                                                | Expect                                                           |
+| --- | --------------------------------------------------- | ---------------------------------------------------------------- |
+| ☐   | Open `/` and `/events`                              | Events load, images show                                         |
+| ☐   | Filters, search and pagination                      | They work and the URL changes                                    |
+| ☐   | Open an event, then `/events/<slug>/tickets`        | The details page, and the full tickets page                      |
+| ☐   | Click **Get tickets** on `/events`                  | The modal opens (class 9)                                        |
+| ☐   | Click **Continue with GitHub**                      | GitHub asks, you come back signed in, the header shows your name |
+| ☐   | `/dashboard` as an attendee                         | "The dashboard is for organizers"                                |
+| ☐   | Promote yourself (SQL in Neon), reload `/dashboard` | The panels load                                                  |
+| ☐   | Reserve a ticket                                    | "Reserved" and the number goes down                              |
+| ☐   | `/api/events`                                       | JSON                                                             |
+| ☐   | A made-up URL                                       | The not-found page                                               |
+| ☐   | **Project → Logs**                                  | No unexpected errors                                             |
 
 ## Step 9 — From now on, deploying is `git push`
 
 Every push to `main` creates a **Production** deployment automatically. Every other branch or pull request creates a **Preview** deployment with its own URL, so you can test and share a change before merging.
 
-| You want to... | Do |
-| -------------- | --- |
-| See why something broke | **Project → Logs** (runtime logs) and the **build log** of a deployment |
-| Go back to the last good version | **Deployments → pick an older good one → ⋯ → Promote to Production / Instant Rollback** |
-| Redeploy without changing code (new env var) | **Deployments → ⋯ → Redeploy** |
-| Try a change safely | Push a branch, open the Preview URL |
+| You want to...                               | Do                                                                                      |
+| -------------------------------------------- | --------------------------------------------------------------------------------------- |
+| See why something broke                      | **Project → Logs** (runtime logs) and the **build log** of a deployment                 |
+| Go back to the last good version             | **Deployments → pick an older good one → ⋯ → Promote to Production / Instant Rollback** |
+| Redeploy without changing code (new env var) | **Deployments → ⋯ → Redeploy**                                                          |
+| Try a change safely                          | Push a branch, open the Preview URL                                                     |
 
 ## Step 10 — A custom domain (optional)
 
@@ -426,14 +428,14 @@ Every push to `main` creates a **Production** deployment automatically. Every ot
 
 # Part 5 — Environment variables reference
 
-| Variable | Where it comes from | Environments | Notes |
-| -------- | ------------------- | ------------ | ----- |
-| `DATABASE_URL` | Injected by the **Neon integration** (pooled) | Production (+ Development) | What the running app **and the build's migration** use |
-| `DATABASE_URL_UNPOOLED` | Injected by the integration (direct) | Production (+ Development) | **You** use it for the seed or a manual command |
-| `BETTER_AUTH_SECRET` | **You**: `npx auth@latest secret` | Production (+ Preview) | **New** for production. Never the local one |
-| `BETTER_AUTH_URL` | **You**: your production URL | Production | `https://...`, no trailing slash. Changes with a custom domain |
-| `GITHUB_CLIENT_ID` | The **production** GitHub OAuth app | Production | Public-ish, but keep it with the rest |
-| `GITHUB_CLIENT_SECRET` | The same app | Production | **Secret**. Shown once on GitHub |
+| Variable                | Where it comes from                           | Environments               | Notes                                                          |
+| ----------------------- | --------------------------------------------- | -------------------------- | -------------------------------------------------------------- |
+| `DATABASE_URL`          | Injected by the **Neon integration** (pooled) | Production (+ Development) | What the running app **and the build's migration** use         |
+| `DATABASE_URL_UNPOOLED` | Injected by the integration (direct)          | Production (+ Development) | **You** use it for the seed or a manual command                |
+| `BETTER_AUTH_SECRET`    | **You**: `npx auth@latest secret`             | Production (+ Preview)     | **New** for production. Never the local one                    |
+| `BETTER_AUTH_URL`       | **You**: your production URL                  | Production                 | `https://...`, no trailing slash. Changes with a custom domain |
+| `GITHUB_CLIENT_ID`      | The **production** GitHub OAuth app           | Production                 | Public-ish, but keep it with the rest                          |
+| `GITHUB_CLIENT_SECRET`  | The same app                                  | Production                 | **Secret**. Shown once on GitHub                               |
 
 How Vercel handles them:
 
@@ -450,12 +452,12 @@ How Vercel handles them:
 
 ## 6.1 Watching it
 
-| Where | What you see |
-| ----- | ------------ |
-| **Project → Logs** | Runtime logs: every request, every `console.error`, and server errors with their **digest** (the `Error ID` your error page shows) |
-| **Deployments** | Every build, its log, its status, its URL |
-| **Analytics / Speed Insights** (optional) | Visitors and Core Web Vitals. Enable them in the project |
-| **Neon console** (Storage → Open in Neon) | Queries, storage, connections, branches, restore |
+| Where                                     | What you see                                                                                                                       |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Project → Logs**                        | Runtime logs: every request, every `console.error`, and server errors with their **digest** (the `Error ID` your error page shows) |
+| **Deployments**                           | Every build, its log, its status, its URL                                                                                          |
+| **Analytics / Speed Insights** (optional) | Visitors and Core Web Vitals. Enable them in the project                                                                           |
+| **Neon console** (Storage → Open in Neon) | Queries, storage, connections, branches, restore                                                                                   |
 
 When a user reports "Error ID 3833995198", search the logs for it. That's what the digest is for.
 
@@ -495,34 +497,34 @@ Run `vercel <command> --help` for the options. The dashboard and Git-based deplo
 
 ## Build problems (the deployment never goes live)
 
-| What you see in the build log | Likely cause → fix |
-| ----------------------------- | ------------------ |
-| `Type error: ...` / `Failed to type check` | The same error as `npm run build` locally. Fix it there first |
-| `DATABASE_URL is not set` (right after `drizzle-kit migrate`) | The database isn't connected to this **environment** yet. Connect Neon (3.3) and redeploy. A placeholder no longer works, the migration must reach a real database |
-| `You are using the default secret ... BETTER_AUTH_SECRET` | Add `BETTER_AUTH_SECRET` and redeploy |
-| A migration error in the build log (`drizzle-kit migrate` fails) | Read the SQL error. Common causes: a row that breaks migration `0006` (`canceled`), a connection or lock error on the pooled URL (try the unpooled one), or someone edited an old migration |
-| A Preview deployment fails at the migration step | Preview has no database variable. Either connect it to a **preview database branch**, or don't build previews. **Never** point Preview at the production database |
-| `Module not found: Can't resolve './EventCard'` | **File-name casing.** Linux is case-sensitive. Match the import to the exact file name |
-| `No Next.js version detected` / `Couldn't find any pages or app directory` | Wrong **Root Directory**. Point it at the folder that contains `package.json` |
-| `npm ERR!` / `ERESOLVE` during install | Lockfile or dependency conflict. Reproduce with `npm ci` locally |
-| A lint error that doesn't happen locally | Different dependency versions: commit your `package-lock.json` and use `npm ci` |
+| What you see in the build log                                              | Likely cause → fix                                                                                                                                                                          |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Type error: ...` / `Failed to type check`                                 | The same error as `npm run build` locally. Fix it there first                                                                                                                               |
+| `DATABASE_URL is not set` (right after `drizzle-kit migrate`)              | The database isn't connected to this **environment** yet. Connect Neon (3.3) and redeploy. A placeholder no longer works, the migration must reach a real database                          |
+| `You are using the default secret ... BETTER_AUTH_SECRET`                  | Add `BETTER_AUTH_SECRET` and redeploy                                                                                                                                                       |
+| A migration error in the build log (`drizzle-kit migrate` fails)           | Read the SQL error. Common causes: a row that breaks migration `0006` (`canceled`), a connection or lock error on the pooled URL (try the unpooled one), or someone edited an old migration |
+| A Preview deployment fails at the migration step                           | Preview has no database variable. Either connect it to a **preview database branch**, or don't build previews. **Never** point Preview at the production database                           |
+| `Module not found: Can't resolve './EventCard'`                            | **File-name casing.** Linux is case-sensitive. Match the import to the exact file name                                                                                                      |
+| `No Next.js version detected` / `Couldn't find any pages or app directory` | Wrong **Root Directory**. Point it at the folder that contains `package.json`                                                                                                               |
+| `npm ERR!` / `ERESOLVE` during install                                     | Lockfile or dependency conflict. Reproduce with `npm ci` locally                                                                                                                            |
+| A lint error that doesn't happen locally                                   | Different dependency versions: commit your `package-lock.json` and use `npm ci`                                                                                                             |
 
 ## Runtime problems (the site is live but something is broken)
 
-| Symptom | Likely cause → fix |
-| ------- | ------------------ |
-| 500 on pages with data. Logs: `relation "events" does not exist` | The migrations didn't run on this database (the deploy was built without it). Redeploy with the database connected |
-| 500. Logs: `password authentication failed` / `connection refused` | The `DATABASE_URL` is wrong or not set for Production. Check **Settings → Environment Variables**, then redeploy |
-| `too many clients` / `remaining connection slots` | Use the **pooled** `DATABASE_URL` in the app (not the unpooled one) |
-| GitHub: `redirect_uri_mismatch` | The OAuth app's callback URL isn't exactly `https://<your-domain>/api/auth/callback/github` |
-| Sign-in works but you're signed out on the next page, or odd redirects | `BETTER_AUTH_URL` missing or wrong (an `http://` URL, a different domain, a trailing slash). Fix it and redeploy |
-| "Continue with GitHub" button missing | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` not set for Production, or you didn't redeploy |
-| Images are broken (400) | The host isn't in `images.remotePatterns` in `next.config.ts` |
-| You changed an env var and nothing happened | Env changes apply to **new** deployments only. Redeploy |
-| Data on a page never updates | The page was **prerendered at build time** (`○` Static). Make it dynamic (2.2, #3), or revalidate |
-| Preview deployment has no data or can't sign in | Expected: Preview isn't connected to the database, and GitHub allows one callback URL |
-| The first request after a while is slow | Cold start (the function and the free database wake up). Normal |
-| It worked locally, fails on Vercel | A difference: env vars, file-name casing, Node version, or the database. Diff the two with the checklist |
+| Symptom                                                                | Likely cause → fix                                                                                                 |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 500 on pages with data. Logs: `relation "events" does not exist`       | The migrations didn't run on this database (the deploy was built without it). Redeploy with the database connected |
+| 500. Logs: `password authentication failed` / `connection refused`     | The `DATABASE_URL` is wrong or not set for Production. Check **Settings → Environment Variables**, then redeploy   |
+| `too many clients` / `remaining connection slots`                      | Use the **pooled** `DATABASE_URL` in the app (not the unpooled one)                                                |
+| GitHub: `redirect_uri_mismatch`                                        | The OAuth app's callback URL isn't exactly `https://<your-domain>/api/auth/callback/github`                        |
+| Sign-in works but you're signed out on the next page, or odd redirects | `BETTER_AUTH_URL` missing or wrong (an `http://` URL, a different domain, a trailing slash). Fix it and redeploy   |
+| "Continue with GitHub" button missing                                  | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` not set for Production, or you didn't redeploy                         |
+| Images are broken (400)                                                | The host isn't in `images.remotePatterns` in `next.config.ts`                                                      |
+| You changed an env var and nothing happened                            | Env changes apply to **new** deployments only. Redeploy                                                            |
+| Data on a page never updates                                           | The page was **prerendered at build time** (`○` Static). Make it dynamic (see the lesson in 2.2), or revalidate    |
+| Preview deployment has no data or can't sign in                        | Expected: Preview isn't connected to the database, and GitHub allows one callback URL                              |
+| The first request after a while is slow                                | Cold start (the function and the free database wake up). Normal                                                    |
+| It worked locally, fails on Vercel                                     | A difference: env vars, file-name casing, Node version, or the database. Diff the two with the checklist           |
 
 ---
 
@@ -531,7 +533,7 @@ Run `vercel <command> --help` for the options. The dashboard and Git-based deplo
 1. **Run the gates.** Run `npm run check` on this folder. Which step fails, and why? Fix it with `npm run format` and read the diff.
 2. **Run the real build locally** (2.3) against an empty local database. Which lines show the migrations running before `next build`?
 3. **Prove the build needs its variables.** Run `npm run build` with no environment variables, then with only `DATABASE_URL`, then with both. Which error appears each time, and in which file?
-4. **Read the route table.** Which route shows as `○` Static although it reads the database? Apply the fix from 2.2 (#3), rebuild, and compare.
+4. **Read the route table.** Which routes read the database yet show as `○` Static? Temporarily remove the `requireOrganizer` line from `/dashboard/events/new`, rebuild, and compare the table.
 5. **Deploy it.** Follow Part 4 with your own repository. Note the build time and the final URL.
 6. **Break production on purpose, safely.** Delete `BETTER_AUTH_URL` in Vercel and redeploy. What changes on the sign-in flow? Put it back.
 7. **Find a log line.** Cause an error on the live site (open `/events/no-such-event`, or temporarily break a query on a branch). Find it in **Project → Logs**.

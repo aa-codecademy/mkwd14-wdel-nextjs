@@ -39,7 +39,8 @@ export const db = drizzle({
   schema,
   // Must match drizzle.config.ts: camelCase in TypeScript <-> snake_case in the database.
   casing: 'snake_case',
-  // Print every SQL statement in the terminal running `npm run dev`. Great for learning what
-  // Drizzle sends to PostgreSQL. Turn it off (or make it conditional) before production.
-  logger: true,
+  // Print every SQL statement (WITH its values) in the terminal running `npm run dev`. Great for learning what
+  // Drizzle sends to PostgreSQL. Only in development: in production the logs are shared, and the values
+  // can contain personal data (emails, names).
+  logger: process.env.NODE_ENV !== 'production',
 });

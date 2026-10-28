@@ -1,7 +1,7 @@
 ---
-name: "Styling with Tailwind CSS 4 and shadcn/ui"
-description: "CSS-first Tailwind 4, design tokens in @theme, v3-to-v4 renames, and shadcn/ui usage"
-applyTo: "**/*.tsx,**/*.css"
+name: 'Styling with Tailwind CSS 4 and shadcn/ui'
+description: 'CSS-first Tailwind 4, design tokens in @theme, v3-to-v4 renames, and shadcn/ui usage'
+applyTo: '**/*.tsx,**/*.css'
 ---
 
 <!-- Generated from tools/agent-rules in the course repo. Edit the source, not this file. -->

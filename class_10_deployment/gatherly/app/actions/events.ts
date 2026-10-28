@@ -107,13 +107,12 @@ export async function createEvent(
   // 1. AUTHENTICATE: who is asking? The session says so. The owner of the new event is THIS user, taken from
   //    the server (never from a form field). A page-level check never covers an action: the proxy and the
   //    page protect the PAGE, and this function is its own public endpoint, so it checks by itself.
-  //    ⚠️ Two gaps remain: it only checks that SOMEONE is signed in, not their ROLE (a signed-in attendee
-  //    could post here directly), and a missing user THROWS, which shows the error page. The stronger
-  //    version is `const organizer = await requireOrganizer('/dashboard/events/new');` (role + redirect).
-  //    (Compare with setEventStatus at the bottom of this file: it DOES check the role.)
+  //    The ROLE is checked as well: without it a signed-in ATTENDEE could post to this endpoint directly.
+  //    A failure THROWS, which shows the error page. (An action can't redirect to a sign-in page the way
+  //    a page can, so it refuses. Compare with setEventStatus at the bottom of this file.)
   const organizer = await getCurrentUser();
 
-  if (!organizer) {
+  if (!organizer || !canManageEvents(organizer.role)) {
     throw new Error('Issue while creating an Event');
   }
 

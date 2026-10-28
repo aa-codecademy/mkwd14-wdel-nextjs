@@ -25,9 +25,9 @@ export default async function AttendeesSlot() {
           {attendees.map((row) => (
             <li key={row.ticketId} className="p-3">
               <p className="font-medium">
-								{row.attendee}
-								{/* Idea for later: a tick once the attendee is checked in (needs checkedInAt in the query). */}
-								{/* {row.checkedInAt && <span title="Checked in">✓</span>} */}
+                {row.attendee}
+                {/* Idea for later: a tick once the attendee is checked in (needs checkedInAt in the query). */}
+                {/* {row.checkedInAt && <span title="Checked in">✓</span>} */}
               </p>
               <p className="text-muted-foreground">
                 {row.eventTitle} · {row.ticketType}

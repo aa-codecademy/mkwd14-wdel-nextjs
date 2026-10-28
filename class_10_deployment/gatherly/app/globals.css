@@ -4,9 +4,9 @@
  */
 @import 'tailwindcss';
 /* Animation utilities (animate-in, fade-in, ...) used by shadcn components. */
-@import "tw-animate-css";
+@import 'tw-animate-css';
 /* Base styles that shadcn's own components rely on (comes from the `shadcn` package). */
-@import "shadcn/tailwind.css";
+@import 'shadcn/tailwind.css';
 /*
  ---break---
  */

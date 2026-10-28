@@ -1,8 +1,8 @@
 ---
 paths:
-  - "app/**"
-  - "lib/**"
-  - "components/**"
+  - 'app/**'
+  - 'lib/**'
+  - 'components/**'
 ---
 
 <!-- Generated from tools/agent-rules in the course repo. Edit the source, not this file. -->

@@ -1,7 +1,7 @@
 ---
 paths:
-  - "**/*.tsx"
-  - "**/*.css"
+  - '**/*.tsx'
+  - '**/*.css'
 ---
 
 <!-- Generated from tools/agent-rules in the course repo. Edit the source, not this file. -->

@@ -1,7 +1,7 @@
 ---
-name: "Authentication and authorization with Better Auth"
-description: "Better Auth sessions on the server and client, and where authorization checks must go"
-applyTo: "app/**,lib/**,proxy.ts"
+name: 'Authentication and authorization with Better Auth'
+description: 'Better Auth sessions on the server and client, and where authorization checks must go'
+applyTo: 'app/**,lib/**,proxy.ts'
 ---
 
 <!-- Generated from tools/agent-rules in the course repo. Edit the source, not this file. -->
@@ -16,10 +16,10 @@ Do **not** use NextAuth / Auth.js, and do not suggest migrating to it.
 - Server (Server Components, Server Actions, Route Handlers) — use the helpers in `lib/session.ts`:
 
   ```ts
-  import { getCurrentUser, requireOrganizer } from "@/lib/session";
+  import { getCurrentUser, requireOrganizer } from '@/lib/session';
 
   const user = await getCurrentUser(); // actions: null when signed out — return an error
-  const organizer = await requireOrganizer("/dashboard"); // pages: redirects if not allowed
+  const organizer = await requireOrganizer('/dashboard'); // pages: redirects if not allowed
   ```
 
   Underneath, both call `auth.api.getSession({ headers: await headers() })`.

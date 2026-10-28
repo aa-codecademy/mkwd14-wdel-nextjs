@@ -14,4 +14,4 @@
  * Our version re-exports `cn` from the `cn` package, a small drop-in
  * replacement made by the shadcn team. You use it the same way.
  */
-export { cn } from "cn"
+export { cn } from 'cn';

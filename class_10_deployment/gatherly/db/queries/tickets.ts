@@ -64,31 +64,33 @@ export async function getUserTicketsCount(eventId: string, userId: string) {
 // Like all user-owned queries, it filters by the owner: `orders.userId = <the session's user id>`, so nobody can
 // list another person's tickets. Cancelled orders are hidden, but pending/paid/refunded still show.
 export async function getUserTickets(userId: string) {
-  return db
-    .select({
-      id: tickets.id,
-      code: tickets.code,
-      attendeeName: tickets.attendeeName,
-      ticketType: ticketTypes.name,
-      orderId: orders.id,
-      status: orders.status,
-      totalCents: orders.totalCent,
-      eventTitle: events.title,
-      eventSlug: events.slug,
-      startsAt: events.startsAt,
-      city: events.city,
-      checkedInAt: checkIns.checkedInAt, // null until the door scans it
-    })
-    // A ticket knows its order and its ticket type, and the event is reached through the order.
-    .from(tickets)
-    .innerJoin(orders, eq(orders.id, tickets.orderId))
-    .innerJoin(ticketTypes, eq(ticketTypes.id, tickets.ticketTypeId))
-    .innerJoin(events, eq(events.id, orders.eventId))
-    // LEFT JOIN: most tickets have NO check-in row yet. An inner join would hide every unscanned ticket,
-    // and `checkedInAt` would simply be null for those that remain visible.
-    .leftJoin(checkIns, eq(checkIns.ticketId, tickets.id))
-    .where(and(eq(orders.userId, userId), ne(orders.status, 'cancelled')))
-    .orderBy(desc(orders.createdAt));
+  return (
+    db
+      .select({
+        id: tickets.id,
+        code: tickets.code,
+        attendeeName: tickets.attendeeName,
+        ticketType: ticketTypes.name,
+        orderId: orders.id,
+        status: orders.status,
+        totalCents: orders.totalCent,
+        eventTitle: events.title,
+        eventSlug: events.slug,
+        startsAt: events.startsAt,
+        city: events.city,
+        checkedInAt: checkIns.checkedInAt, // null until the door scans it
+      })
+      // A ticket knows its order and its ticket type, and the event is reached through the order.
+      .from(tickets)
+      .innerJoin(orders, eq(orders.id, tickets.orderId))
+      .innerJoin(ticketTypes, eq(ticketTypes.id, tickets.ticketTypeId))
+      .innerJoin(events, eq(events.id, orders.eventId))
+      // LEFT JOIN: most tickets have NO check-in row yet. An inner join would hide every unscanned ticket,
+      // and `checkedInAt` would simply be null for those that remain visible.
+      .leftJoin(checkIns, eq(checkIns.ticketId, tickets.id))
+      .where(and(eq(orders.userId, userId), ne(orders.status, 'cancelled')))
+      .orderBy(desc(orders.createdAt))
+  );
 }
 
 // NEW (class 10): ONE order with its event and tickets, for the order confirmation / checkout screen.

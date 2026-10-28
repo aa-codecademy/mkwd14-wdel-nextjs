@@ -3,7 +3,7 @@
 // flex, p-4, ...). There is no tailwind.config.js in Tailwind 4: the setup lives in the CSS file.
 const config = {
   plugins: {
-    "@tailwindcss/postcss": {},
+    '@tailwindcss/postcss': {},
   },
 };
 

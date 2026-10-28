@@ -1,8 +1,8 @@
 ---
 paths:
-  - "lib/db/**"
-  - "drizzle.config.ts"
-  - "drizzle/**"
+  - 'lib/db/**'
+  - 'drizzle.config.ts'
+  - 'drizzle/**'
 ---
 
 <!-- Generated from tools/agent-rules in the course repo. Edit the source, not this file. -->

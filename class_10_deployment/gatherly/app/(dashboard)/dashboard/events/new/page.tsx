@@ -12,17 +12,23 @@
  *
  * It lives in the (dashboard) route group, so the sidebar layout wraps it automatically.
  *
- * ⚠️ AUTHORIZATION GAP: proxy.ts keeps visitors WITHOUT a cookie out of /dashboard/*, but this page doesn't
- * call requireOrganizer() the way /dashboard does. A signed-in ATTENDEE (any cookie passes the proxy)
- * can open it. Add the guard at the top, and add it to the Server Action too: a page check never
- * protects the action behind it.
+ * ✅ AUTHORIZATION: proxy.ts only keeps visitors WITHOUT a cookie out of /dashboard/* (any cookie passes it),
+ * so the page calls requireOrganizer() itself, like /dashboard does. That has a second effect that matters
+ * for deployment: reading the session cookie makes the page DYNAMIC. Without it this page uses no request
+ * data, so Next.js would PRERENDER it at build time and freeze the venue and category lists in the HTML
+ * (on a first deploy the database is still empty, so the form would have no options). The Server Action
+ * checks the role too: a page check never protects the action behind it.
  */
 // The options for the <select> and the checkboxes come from the database, so a new venue or
 // category appears in the form without changing any code.
 import { getEventFormOptions } from '../../../../../db/queries/dashboard';
+import { requireOrganizer } from '../../../../../lib/session';
 import { NewEventForm } from './_components/new-event-form';
 
 export default async function NewEventFormPage() {
+  // Redirects signed-out users to /sign-in and attendees to /organizers-only. `returnTo` brings them back after signing in.
+  await requireOrganizer('/dashboard/events/new');
+
   // Props passed from a Server to a Client Component must be plain data (objects, arrays, strings),
   // because they travel over the network. Functions and class instances can't.
   const { venues, categories } = await getEventFormOptions();

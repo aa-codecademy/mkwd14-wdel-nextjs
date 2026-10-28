@@ -24,9 +24,8 @@ export async function createApiToken(organizerId: string, label: string) {
   // The `gatherly_` prefix makes tokens recognizable (in logs, in secret scanners). base64url = safe in URLs and headers.
   const token = `gatherly_${randomBytes(32).toString('base64url')}`;
 
-  // ⚠️ Leftover debug line: it writes the PLAIN token to the server logs, which defeats storing only a hash.
-  // Anyone with log access (hosting dashboard, log drains) could use it. Delete it before real use.
-  console.log('🚀 ~ createApiToken ~ token:', token);
+  // ⚠️ Never log the PLAIN token (not even while debugging): production logs are shared and searchable, so a
+  // logged token is a leaked secret and storing only the hash would be pointless.
 
   // Only the hash goes to the database. `lastUsedAt` and `revokedAt` stay null until a request uses / we revoke it.
   await db.insert(apiTokens).values({ organizerId, label, tokenHash: hash(token) });

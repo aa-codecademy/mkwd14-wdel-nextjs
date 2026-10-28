@@ -1,7 +1,7 @@
 ---
-name: "Database with Drizzle ORM 0.45 and PostgreSQL"
-description: "Drizzle 0.45 relations and queries (not the 1.0 RC docs), migrations, and schema conventions"
-applyTo: "lib/db/**,drizzle.config.ts,drizzle/**"
+name: 'Database with Drizzle ORM 0.45 and PostgreSQL'
+description: 'Drizzle 0.45 relations and queries (not the 1.0 RC docs), migrations, and schema conventions'
+applyTo: 'lib/db/**,drizzle.config.ts,drizzle/**'
 ---
 
 <!-- Generated from tools/agent-rules in the course repo. Edit the source, not this file. -->

@@ -1,7 +1,7 @@
 ---
-name: "Server Actions, forms, Zod 4 and Route Handlers"
-description: "How to write mutations, validate input with Zod 4, and when a Route Handler is the right tool"
-applyTo: "app/**,lib/**,components/**"
+name: 'Server Actions, forms, Zod 4 and Route Handlers'
+description: 'How to write mutations, validate input with Zod 4, and when a Route Handler is the right tool'
+applyTo: 'app/**,lib/**,components/**'
 ---
 
 <!-- Generated from tools/agent-rules in the course repo. Edit the source, not this file. -->

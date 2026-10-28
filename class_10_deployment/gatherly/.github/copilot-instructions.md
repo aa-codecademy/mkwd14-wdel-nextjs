@@ -94,7 +94,7 @@ drizzle/              generated SQL migrations — never edit by hand
 **Promises**. Synchronous access was removed in Next 16.
 
 ```tsx
-export default async function EventPage({ params }: PageProps<"/events/[slug]">) {
+export default async function EventPage({ params }: PageProps<'/events/[slug]'>) {
   const { slug } = await params;
   // ...
 }
