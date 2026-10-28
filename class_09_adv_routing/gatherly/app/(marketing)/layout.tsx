@@ -20,6 +20,7 @@ import { Footer } from '../../components/footer';
 // Props typed by hand here. `modal` is the PARALLEL ROUTE slot from the `@modal` folder:
 // every `@folder` next to this layout arrives as a prop with that name, and the layout must
 // render it, or whatever the slot matches (the intercepted tickets modal) is never shown.
+// (`children` = the normal page, `modal` = the slot. Both are rendered at the same time.)
 export default function MarketingLayout({
   children,
   modal,
@@ -33,6 +34,7 @@ export default function MarketingLayout({
       {/* `mx-auto max-w-5xl` centres the content and limits its width; `px-4` adds side padding. */}
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10">{children}</main>
       <Footer />
+      {/* The slot goes last, outside <main>: when a modal is open it overlays the page; otherwise it's null. */}
       {modal}
     </div>
   );

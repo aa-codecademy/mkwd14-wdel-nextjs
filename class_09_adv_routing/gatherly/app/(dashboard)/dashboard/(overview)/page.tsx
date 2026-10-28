@@ -1,30 +1,27 @@
 /**
- * ROUTE: /dashboard   — the organizer's list of their events.
+ * ROUTE: /dashboard   — the main part (`children`) of the organizer overview.
  *
- * A Server Component, wrapped by the sidebar layout of the (dashboard) route group. Since class 7
- * it is PROTECTED:
+ * It sits inside the layout next to the parallel slots (see layout.tsx): the number tiles, recent
+ * orders and attendees come from `@stats`, `@orders` and `@attendees`, and THIS page renders the
+ * list of the organizer's events below them.
  *
  *   const organizer = await requireOrganizer('/dashboard');
  *
- * That first line is the guard (lib/session.ts). It reads the session cookie, asks the database who
- * you are, and then:
- *   not signed in           -> redirect to /sign-in?next=/dashboard   (you come back after logging in)
+ * That first line is the guard (lib/session.ts), explained in the class 07 README:
+ *   not signed in           -> redirect to /sign-in?next=/dashboard
  *   signed in, attendee     -> redirect to /organizers-only
  *   signed in, organizer    -> carries on, and returns the user, so we can use `organizer.id`
- * proxy.ts also bounces visitors without a cookie before the page runs, but that is only a quick
- * first filter. This line is the real lock.
  *
  * What is real and what is still a placeholder:
  *   ✅ the page is only for organizers and admins
+ *   ✅ the list is limited to THIS organizer's events (getOrganizerEvents filters by owner now, so
+ *      the data leak of class 7 is closed)
  *   ✅ "New event" opens a real form (app/actions/events.ts)
  *   🚧 "Signed in as JohnDoe" is still hard-coded: it should print `organizer.name`
- *   🚧 getOrganizerEvents(organizer.id) gets the id, but the QUERY ignores it, so you see
- *      everyone's events (see db/queries/dashboard.ts: a data leak to fix)
  *   🚧 <form action=""> around Publish/Unpublish does nothing yet. A Server Action goes there,
  *      and it must check that the event BELONGS to the signed-in organizer.
  *
- * Because it reads the cookie (through requireOrganizer), the page is rendered on every request:
- * Next.js can't prerender something that depends on who is asking.
+ * It lives in the `(overview)` route group, so the URL is still just /dashboard.
  */
 import Link from 'next/link';
 // `buttonVariants` gives a <Link> the LOOK of a button (see components/ui/button.tsx):

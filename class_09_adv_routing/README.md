@@ -1,13 +1,14 @@
-# Class 08 — Route Handlers & a Public API
+# Class 09 — Advanced Routing: Parallel Routes, Intercepting Routes & Modals
 
-Until now, everything Gatherly sent out was made **for people**: HTML pages. In this class it also learns to talk to **programs**: a phone app, another website, a script, a calendar. For that we build a small **public JSON API** with **Route Handlers**, the Next.js files that answer plain HTTP requests.
+So far every URL showed **one** page. In this class the App Router shows its two most powerful (and most confusing) features:
 
-> 🧭 **Where we are:** two read-only endpoints work (`GET /api/events` and `GET /api/events/[slug]`), plus the calendar download from class 7 (`.ics`). The design is right (strict validation, a whitelist of public fields, one error format), but **two bugs** stop errors from working properly: they go out as HTTP **200**, and the list endpoint forgets a `return`. Both are explained in [Known issues](#known-issues-in-this-snapshot) and are great exercises.
+- **Parallel routes** (`@slot` folders): one URL renders **several independent panels at the same time**, each with its own loading skeleton and error page. We use them to build the organizer **dashboard**: stats, orders and attendees, loading side by side.
+- **Intercepting routes** (`(.)folder`): one URL can show **two different things**, depending on how you got there. We use them for a **"Get tickets" modal** that opens on top of the page you were on, but is also a real page when you open the same URL directly.
 
-This folder is class 7 plus the API. Everything about sign-in, tickets and errors is explained in the [class 07 README](../class_07_auth/README.md).
+> 🧭 **Where we are:** both features work. Along the way the dashboard got its first **real data** (owner-filtered queries with SQL aggregates), the create-event action now saves a **ticket type**, and the ownership leak from class 7 is **closed**. A few small gaps remain (the role check on `createEvent`, the Publish button): see [Known issues](#known-issues-in-this-snapshot).
 
 **On this page:**
-[Run it](#-run-it) · [Part 1: What is an API](#part-1--what-is-an-api) · [Part 2: Route Handlers step by step](#part-2--route-handlers-step-by-step) · [Part 3: The events API](#part-3--the-events-api) · [Part 4: Designing the response](#part-4--designing-the-response) · [Part 5: Validation and errors](#part-5--validation-and-errors) · [Part 6: Testing an API](#part-6--testing-an-api) · [Part 7: Security](#part-7--security-checklist-for-an-api) · [Known issues](#known-issues-in-this-snapshot) · [Exercises](#-try-it-yourself) · [Links](#-useful-links)
+[Run it](#-run-it) · [Part 1: Parallel routes](#part-1--parallel-routes-the-dashboard-panels) · [Part 2: Intercepting routes](#part-2--intercepting-routes-and-the-tickets-modal) · [Part 3: Everything else in this class](#part-3--everything-else-that-changed) · [Known issues](#known-issues-in-this-snapshot) · [Exercises](#-try-it-yourself) · [Links](#-useful-links)
 
 ## 📁 What's in this folder
 
@@ -19,10 +20,10 @@ This folder is class 7 plus the API. Everything about sign-in, tickets and error
 
 ## 🚀 Run it
 
-Same setup as class 7: PostgreSQL running ([class 03](../class_03_db/README.md)), a `.env` with `DATABASE_URL`, `BETTER_AUTH_SECRET` and (optionally) the GitHub values ([class 07, Part 2](../class_07_auth/README.md#part-2--getting-the-github-credentials-step-by-step)).
+Same setup as class 7 (PostgreSQL running, `.env` with `DATABASE_URL`, `BETTER_AUTH_SECRET` and the GitHub values, see the [class 07 README](../class_07_auth/README.md)):
 
 ```bash
-cd class_08_apis/gatherly
+cd class_09_adv_routing/gatherly
 npm install
 cp .env.example .env         # skip if you already have .env (Windows PowerShell: Copy-Item .env.example .env)
 npm run db:migrate
@@ -30,392 +31,362 @@ npm run db:seed              # see the first row of Known issues: the seed has a
 npm run dev
 ```
 
-Then call the API. The simplest way is the browser: open the URLs. Or use `curl` (Part 6):
+### Why is my dashboard empty?
 
-| URL                                                                           | What you get                                                              |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| [/api/events](http://localhost:3000/api/events)                               | A page of published events, as JSON                                       |
-| [/api/events?q=next&sort=price](http://localhost:3000/api/events?q=next&sort=price) | Filtered and sorted                                                 |
-| [/api/events?page=2](http://localhost:3000/api/events?page=2)                 | The second page                                                           |
-| `/api/events/<a-real-slug>`                                                   | One event. Get a slug from the list                                       |
-| [/api/events/does-not-exist](http://localhost:3000/api/events/does-not-exist) | An error JSON (with the status bug, see Known issues)                     |
-| `/api/events/<a-real-slug>/calendar.ics`                                      | A downloaded calendar file                                                |
+The dashboard now only shows data for **the signed-in organizer's own events**. You signed in with GitHub, so **you** own nothing: the seeded events belong to the seeded organizers (`avenga`, `js-mk`, `soundwave`), who can't sign in. Two steps to see real panels:
+
+1. Sign in with GitHub, then make yourself an organizer (class 7): `UPDATE "user" SET role = 'organizer' WHERE email = 'you@example.com';`
+2. Hand yourself the events of one seeded organizer (`psql "<your DATABASE_URL>"`):
+
+```sql
+UPDATE events
+SET organizer_id = (SELECT id FROM "user" WHERE email = 'you@example.com')
+WHERE organizer_id = (SELECT id FROM "user" WHERE handle = 'avenga');
+```
+
+Now `/dashboard` shows Avenga's events, orders and attendees as **yours**. (This is also a nice demonstration that the filtering is by the owner's id.)
+
+Then try:
+
+| URL                                                                  | What you should see                                                                  |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [/dashboard](http://localhost:3000/dashboard)                        | Number tiles, recent orders, recent attendees, and your events: **loading separately** |
+| [/events](http://localhost:3000/events) → click **Get tickets**      | A **modal** over the events list, and the URL becomes `/events/<slug>/tickets`        |
+| Refresh that page                                                    | The same content as a **full page**, with a "← Back to the event" link               |
+| In the modal: press **Escape**, or the X, or the browser's **Back**  | The modal closes and you're back on `/events`                                        |
 
 ---
 
-# Part 1 — What is an API?
+# Part 1 — Parallel routes: the dashboard panels
 
-An **API** (application programming interface) is a way for **programs** to talk to your app. A web **page** answers a browser with HTML that a person reads. An **API** answers any program with **data** (almost always JSON) that code reads.
+## 1.1 The problem
 
-```
-a person  ── GET /events/some-event ───────────►  Gatherly ─► HTML   (a page to look at)
-a program ── GET /api/events/some-event ───────►  Gatherly ─► JSON   (data to use)
-```
+The dashboard needs four things on one screen: **stats**, **recent orders**, **recent attendees** and **your events**. The obvious solution is one page that loads all four. It has three problems:
 
-The same app, the same database, the same query functions. Only the **last step** differs: render a page, or return data. That's why the queries live in `db/queries/` and not inside the pages.
+1. It's **as slow as the slowest query**. The stats can't appear until the orders are ready.
+2. If **one query fails**, the whole dashboard fails.
+3. One huge file that mixes four unrelated things.
 
-## 1.1 HTTP in one page
+**Parallel routes** solve all three. Each panel becomes its own **slot**, with its own page, its own loading state and its own error page, and the layout just decides where to put them.
 
-An API is spoken in **HTTP**. Every exchange has a request and a response.
+## 1.2 What a slot is
 
-**Methods** (what the client wants to do):
-
-| Method   | Meaning                       | Gatherly example                                 |
-| -------- | ----------------------------- | ------------------------------------------------ |
-| `GET`    | **Read.** Never changes data  | List events, get one event, download the `.ics`  |
-| `POST`   | **Create** something          | Create an event (later)                          |
-| `PUT` / `PATCH` | Replace / change something | Update an event                                |
-| `DELETE` | Remove something              | Cancel an event                                  |
-
-**Status codes** (how it went). The code is as important as the body, and clients read it **first**:
-
-| Code  | Name                   | Use it when                                                   |
-| ----- | ---------------------- | ------------------------------------------------------------- |
-| `200` | OK                     | It worked, and here's the data                                |
-| `201` | Created                | A new thing was created                                       |
-| `400` | Bad Request            | The **client** sent something invalid (a bad query string)    |
-| `401` | Unauthorized           | "Who are you?" Not signed in (class 7)                        |
-| `403` | Forbidden              | Signed in, but not allowed (class 7)                          |
-| `404` | Not Found              | No such thing (or one we won't confirm exists)                |
-| `500` | Internal Server Error  | **We** broke: a bug, or the database is down                  |
-
-Rule of thumb: **2xx** = success, **4xx** = the caller's fault (fixing the request helps), **5xx** = our fault.
-
-**Headers** are small labels on a request or response, such as `Content-Type: application/json` (what the body is) or `Content-Disposition: attachment` (download this).
-
-**JSON** is the data format: objects, arrays, strings, numbers, booleans, `null`. It has **no Date type**, so dates travel as text (ISO 8601: `"2027-03-12T08:00:00.000Z"`).
-
-## 1.2 Page, Server Action or Route Handler?
-
-You now have three ways to run code on the server. Choosing right is a skill:
-
-| You want to...                                                       | Use                                   | Why                                                         |
-| -------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------- |
-| Show something to a **person**                                       | A **page** (`page.tsx`)               | Returns HTML                                                |
-| **Change data** from **your own** form or button                     | A **Server Action** (class 6)         | Next.js wires the form and the function for you             |
-| Serve **other programs**: a JSON API, a **file download**, a webhook | A **Route Handler** (`route.ts`)      | You control the full HTTP response: status, headers, body   |
-
-Two warnings from our rules: don't create a Route Handler just so your own page can `fetch` it (a Server Component can query the database directly), and don't use a Server Action to serve data to other clients (they have no form to submit).
-
----
-
-# Part 2 — Route Handlers, step by step
-
-## 2.1 The file: `route.ts`
-
-`route.ts` is to an API what `page.tsx` is to a page. A folder with a `route.ts` becomes an **endpoint** at that URL:
+A folder whose name starts with **`@`** is a **slot**. It is **not** part of the URL: it only gives a name to one region of the page.
 
 ```
-app/api/events/route.ts                      →  /api/events
-app/api/events/[slug]/route.ts               →  /api/events/some-slug
-app/api/events/[slug]/calendar.ics/route.ts  →  /api/events/some-slug/calendar.ics
+app/(dashboard)/dashboard/(overview)/
+├── layout.tsx        ← receives every slot as a PROP and arranges them
+├── page.tsx          ← the normal page: the list of events (this is `children`)
+├── default.tsx       ← fallback for `children` (see 1.5)
+├── @stats/           ← the `stats` prop
+│   ├── page.tsx      ← what the slot renders
+│   ├── loading.tsx   ← its own skeleton
+│   ├── error.tsx     ← its own error page
+│   └── default.tsx   ← its fallback
+├── @orders/          ← the `orders` prop    (same four files)
+└── @attendees/       ← the `attendees` prop (same four files)
 ```
 
-(The folder name is just text, so a folder called `calendar.ics` gives a URL ending in `.ics`. We have no `page.tsx` there: a folder can't have both a `page.tsx` and a `route.ts` for the same URL.)
+The URL for all of it is just **`/dashboard`**. `@stats` doesn't appear anywhere in the address.
 
-Instead of a React component, a Route Handler **exports a function named after the HTTP method**. It receives a `Request` and returns a `Response`:
+## 1.3 The layout puts the slots together
 
-```ts
-export async function GET(request: NextRequest) {
-  return Response.json({ message: 'Hello' });
+```tsx
+export default function OverviewLayout({ children, stats, orders, attendees }: Props) {
+  return (
+    <div className="space-y-6">
+      <section>{stats}</section>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <section className="lg:col-span-2">{orders}</section>
+        <aside>{attendees}</aside>
+      </div>
+      {children}
+    </div>
+  );
 }
 ```
 
-Supported names: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`. A method you don't export answers **405 Method Not Allowed** automatically.
+The rule: **every `@name` folder arrives as a prop called `name`**, next to the usual `children`. If a prop name doesn't match a folder, that slot never renders. The layout is only about **position**. The panels know nothing about each other.
 
-## 2.2 The tools you use
+## 1.4 What each slot gives you
 
-| Tool                                | What it is                                                                                            |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `Request` / `Response`              | The **standard web** objects (the same as in `fetch`). No Next.js magic, so what you learn works elsewhere |
-| `NextRequest`                       | A `Request` with extras. The one we use: `request.nextUrl.searchParams` (the parsed query string)     |
-| `Response.json(body, init)`         | Answers with JSON, and sets `Content-Type` for you. **The status goes in `init`**: `{ status: 404 }`  |
-| `new Response(text, { headers })`   | Answers with anything else (plain text, a file), and you set the headers                              |
-| `RouteContext<'/api/events/[slug]'>` | A **global** type that knows this route's `params`. The Route Handler twin of `PageProps`            |
-| `await ctx.params`                  | The dynamic segments. A **Promise**, like in pages: always `await` it                                 |
+Because each slot is its own little route, you get the special files **per panel**:
 
-## 2.3 They run per request
+| File          | What it does for ONE panel                                                                                        |
+| ------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `page.tsx`    | Fetches its own data (an `async` Server Component) and renders the panel                                          |
+| `loading.tsx` | A **skeleton** shown while this panel's `page.tsx` is fetching. Next.js wraps the page in `<Suspense>` for you    |
+| `error.tsx`   | If this panel's query throws, **only this panel** shows "Couldn't load this panel. Try again", and the rest keeps working |
 
-A `GET` Route Handler runs **on every request** by default (since Next.js 15). Nothing is cached unless you opt in. That's what we want for a JSON API that reads a database.
+So the three panels load **in parallel** and **stream in** as each is ready. Try it: add `await new Promise((r) => setTimeout(r, 2000))` to `@orders/page.tsx`. The stats and attendees appear first, and the orders panel shows its skeleton for 2 seconds.
 
-## 2.4 Walk through the smallest one
+## 1.5 `default.tsx`: the fallback
 
-Open `app/api/events/[slug]/route.ts`. It's short and shows the whole pattern:
+This is the part everyone finds confusing, so let's go slowly.
+
+- On a **client-side navigation** (clicking a link), Next.js **remembers what every slot was showing**.
+- On a **hard navigation** (refresh, a typed address, a shared link) it only knows **the URL**. If a slot has no page that matches that URL, it can't recover its state, and needs something to render.
+
+`default.tsx` is that something. Ours return `null` (an empty panel). Next.js **requires** one for each named slot, and for `children` too (without it you get an error, or a 404 for `children`). The rule is simple: **every `@slot` gets a `default.tsx`.**
+
+## 1.6 The `(overview)` folder: scoping with a route group
+
+Why isn't the layout right in `dashboard/`? Because then **every page below `/dashboard`**, including `/dashboard/events/new` (the form), would get the stats, orders and attendees panels around it. We don't want that.
+
+`(overview)` is a **route group** (parentheses, not in the URL, class 4). It scopes this layout, and its slots, to **just the `/dashboard` page**:
+
+```
+app/(dashboard)/
+├── layout.tsx                    ← the sidebar (for everything in the dashboard group)
+└── dashboard/
+    ├── (overview)/               ← route group: scopes the panels
+    │   ├── layout.tsx            ← the panels' layout
+    │   ├── page.tsx              → /dashboard
+    │   └── @stats, @orders, @attendees
+    └── events/new/page.tsx       → /dashboard/events/new   (NOT wrapped by the panels)
+```
+
+For `/dashboard` the nesting is: `RootLayout` → the sidebar layout → the overview layout (panels) → the events list.
+
+## 1.7 Every slot guards itself
+
+Look at the top of `@stats/page.tsx`, `@orders/page.tsx` and `@attendees/page.tsx`:
 
 ```ts
-export async function GET(_request: NextRequest, ctx: RouteContext<'/api/events/[slug]'>) {
-  const { slug } = await ctx.params;                 // 1. read the URL part
+const organizer = await requireOrganizer('/dashboard');
+const orders = await getRecentOrders(organizer.id);
+```
 
-  const event = await getEventBySlug(slug);          // 2. ask the database (published events only)
+The guard is **repeated** in every slot, on purpose. Slots are separate routes: a check in one place doesn't cover the others (the same lesson as "a page check never covers the action behind it", class 7). `requireOrganizer` is cheap, and **forgetting it is not**.
 
-  if (!event) {
-    return apiError(404, 'not_found', `No published event ${slug}`);   // 3. not found: an error response
-  }
+## 1.8 Common mistakes
 
-  return Response.json({ data: toPublicEvent(event) });                // 4. success: the public shape
+| Mistake                                                       | What happens                                                                         |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| A slot folder with **no `default.tsx`**                       | An error (or a 404) on refresh                                                       |
+| The layout doesn't render a slot (**prop name mismatch**)     | The slot is silently never shown                                                     |
+| A slot with **no `error.tsx`**                                | One failing query takes down the **whole** dashboard instead of one panel            |
+| The slot layout **not scoped** with a route group             | The panels spill onto sibling routes such as the "new event" form                    |
+| Checking the user in one slot only                            | The other slots serve their data to anyone who can reach them                        |
+
+---
+
+# Part 2 — Intercepting routes and the tickets modal
+
+## 2.1 The problem
+
+On `/events` every card has a **Get tickets** button. Where should it go?
+
+- A **new page** (`/events/xyz/tickets`) works, but you **lose your place**: the list, the filters, the scroll position.
+- A **modal** keeps you on the list, but a normal modal has **no URL**: you can't share it, a refresh closes it, and Back leaves the page.
+
+We want **both**: a modal that **has its own URL**. That's what intercepting routes are for.
+
+## 2.2 The idea
+
+The same URL, `/events/xyz/tickets`, renders **different things** depending on how you got there:
+
+| How you arrive                                                      | Kind of navigation | What you see                                                    |
+| ------------------------------------------------------------------- | ------------------ | --------------------------------------------------------------- |
+| Click **Get tickets** inside the app                                | **soft**           | The events list stays, with the tickets in a **modal** on top   |
+| Refresh, open the address in a new tab, or follow a shared link     | **hard**           | The **full page** `events/[slug]/tickets/page.tsx`              |
+
+Both show the **same content**. Only the presentation differs.
+
+## 2.3 The files
+
+Three pieces cooperate, plus the real page:
+
+```
+app/(marketing)/
+├── layout.tsx                                    ← renders {children} AND {modal}
+├── @modal/                                       ← a parallel route slot named "modal"
+│   ├── default.tsx                               ← 1. "no modal" (null)
+│   ├── [...catchAll]/page.tsx                    ← 2. closes the modal on any other URL (null)
+│   └── (.)events/[slug]/tickets/page.tsx         ← 3. THE INTERCEPTOR: the modal
+└── events/[slug]/tickets/page.tsx                ← the real, full-page version
+```
+
+This is where **parallel routes and intercepting routes combine**: the modal lives in an `@modal` **slot** (so it renders next to the page, not instead of it), and the **interception** decides when that slot shows something.
+
+### The interceptor: `(.)events/[slug]/tickets`
+
+The folder name has a marker in parentheses at the front:
+
+| Marker      | Intercepts a route...                    |
+| ----------- | ---------------------------------------- |
+| `(.)`       | on the **same level**                    |
+| `(..)`      | **one level** above                      |
+| `(..)(..)`  | **two levels** above                     |
+| `(...)`     | from the **root** of `app/`              |
+
+> ⚠️ The levels count **URL segments, not folders**. Route groups like `(marketing)` and slots like `@modal` **don't count**, because they aren't in the URL. That's why `(.)events` inside `app/(marketing)/@modal/` matches `/events/...`, even though on disk it's several folders deep.
+
+### The three files of a modal slot
+
+Every modal built this way needs these three. Forgetting one is the classic bug:
+
+| File                          | Job                                                                                                      |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `@modal/default.tsx`          | `null`: **no modal** when nothing matches, and on a refresh                                              |
+| `@modal/(.)events/.../page.tsx` | **The modal itself**: shown when the intercepted URL is reached by a soft navigation                   |
+| `@modal/[...catchAll]/page.tsx` | `null`: **closes the modal** when you navigate to any other URL                                        |
+
+The catch-all is easy to miss, so here is why it exists. On a soft navigation a slot **keeps what it was showing** if the new URL has no match for it. Without the catch-all, you'd open the modal, click a link to `/about`, and **the modal would stay open on top of `/about`**. The catch-all matches every other URL and renders `null`, which clears the slot.
+
+## 2.4 One click, step by step
+
+```
+1. You're on /events. The URL is /events. The @modal slot shows default.tsx (nothing).
+2. You click "Get tickets":  <Link href="/events/xyz/tickets">   (components/event-card.tsx)
+3. Soft navigation. Next.js sees that @modal has a route matching this URL: (.)events/[slug]/tickets.
+   It renders THAT in the slot instead of loading the real page.
+4. The browser URL is now /events/xyz/tickets, but the events list is STILL on screen,
+   because `children` kept its state. The modal appears on top (components/route-modal.tsx).
+5. You press Escape.  The dialog asks to close, and RouteModal answers with router.back().
+6. The URL goes back to /events. The intercepting route no longer matches, so @modal renders
+   default.tsx (null). The modal is gone.
+7. Now refresh while on /events/xyz/tickets.  Hard navigation: no interception, the REAL page
+   (events/[slug]/tickets/page.tsx) renders with the heading and a "Back to the event" link.
+```
+
+## 2.5 The modal: `RouteModal` and the `Dialog`
+
+A normal modal keeps an `open` flag in `useState`. A **route modal has no state**: it's open **exactly when the intercepting route is rendered**.
+
+```tsx
+export function RouteModal({ title, children }: RouteModalProps) {
+  const router = useRouter();
+  return (
+    <Dialog open onOpenChange={(open) => !open && router.back()}>
+      <DialogContent>
+        <DialogTitle>{title}</DialogTitle>
+        {children}
+      </DialogContent>
+    </Dialog>
+  );
 }
 ```
 
-Four steps: **read input → fetch → handle "not found" → return the right shape.** Every handler you'll ever write is a variation on this.
+- `open` with no value: always open while this component exists.
+- `onOpenChange` fires with the **new** state. When the user presses Escape, clicks the overlay or the X, it fires with `false`, and we call **`router.back()`**. That returns to the previous URL, which un-matches the interceptor and clears the slot.
+- Because the modal is just a URL, the **Back button closes it for free**, and the URL can be shared.
+
+The **`Dialog`** comes from shadcn (`npx shadcn@latest add dialog`, built on Base UI). It handles the hard part, **accessibility**: focus moves into the dialog and is **trapped** there, Escape closes it, the page behind becomes inert, and screen readers announce the `DialogTitle` (every dialog needs one).
+
+## 2.6 One content, two presentations
+
+Both the modal and the full page render **`<TicketsForSlug>`**. It takes the `params` **Promise**, awaits it, loads the event, and shows the date, the place and the ticket list (with the Reserve buttons from class 7). Because the content is written **once**, the modal and the page can never drift apart. The full page adds only a heading and a back link.
+
+Notice that `params` is passed down **un-awaited**. The modal shell (title, overlay) renders immediately, and the content streams in inside a `<Suspense>`: the same streaming idea you've used since class 2.
+
+## 2.7 Test checklist
+
+| Do this                                                           | Expect                                                                 |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Click **Get tickets** on `/events`                                | Modal over the list. URL `/events/<slug>/tickets`                      |
+| Press **Escape**                                                  | Modal closes, URL is `/events` again                                   |
+| Open the modal, click the browser **Back**                        | Same: closes                                                           |
+| Open the modal, click **About** in the header                     | The modal is gone, and you're on `/about` (the catch-all at work)      |
+| Open the modal, then **refresh**                                  | The full tickets page, not a modal                                     |
+| Copy `/events/<slug>/tickets` into a new tab                      | The full page                                                          |
+| Remove `[...catchAll]` and repeat the **About** test              | The modal stays open on top of `/about`: now you know why it's there   |
 
 ---
 
-# Part 3 — The events API
+# Part 3 — Everything else that changed
 
-## 3.1 `GET /api/events`: list
+## 3.1 The ownership leak is closed
 
-Query parameters (all optional):
-
-| Param      | Rule                                         | Default | Example               |
-| ---------- | -------------------------------------------- | ------- | --------------------- |
-| `q`        | text, at least 1 character                   | none    | `?q=next`             |
-| `category` | a category slug                              | none    | `?category=meetup`    |
-| `city`     | a city name                                  | none    | `?city=Skopje`        |
-| `from`     | a date `YYYY-MM-DD`                          | none    | `?from=2027-03-01`    |
-| `sort`     | `date`, `price` or `newest`                  | `date`  | `?sort=price`         |
-| `page`     | a whole number ≥ 1                           | `1`     | `?page=2`             |
-| `limit`    | a whole number 1 to 50 ⚠️ *currently ignored* | `20`   | `?limit=10`           |
-
-An unknown parameter (`?foo=1`) is an **error**, not ignored (Part 5). The answer:
-
-```json
-{
-  "data": [
-    {
-      "slug": "nextjs-conf-skopje-2027",
-      "title": "Next.js Conf Skopje 2027",
-      "description": "...",
-      "startsAt": "2027-03-12T08:00:00.000Z",
-      "endsAt": "2027-03-12T17:00:00.000Z",
-      "city": "Skopje",
-      "fromPriceCents": 4900,
-      "coverImageUrl": "https://...",
-      "venue": { "name": "Innovation Hub", "address": "Ul. Makedonija 11", "city": "Skopje" },
-      "organizer": { "name": "Avenga Academy", "handle": "avenga" },
-      "categories": ["conference"],
-      "links": { "page": "/events/nextjs-conf-skopje-2027", "calendar": "/api/events/nextjs-conf-skopje-2027/calendar.ics" }
-    }
-  ],
-  "page": 1,
-  "total": 12,
-  "pageCount": 2
-}
-```
-
-`data` holds the items, and `page`, `total` and `pageCount` let a client build its own "next page" button. It reuses `searchEvents(filters)`, the **same function** as the `/events` page.
-
-## 3.2 `GET /api/events/[slug]`: one event
-
-`{ "data": { ...one event... } }`, or a **404** error for an unknown slug **or an unpublished event**. A draft answers exactly like a missing event: the API never confirms that an event you may not see exists.
-
-## 3.3 `GET /api/events/[slug]/calendar.ics`: a file, not JSON
-
-Added in class 7. The same kind of handler, but the response is a **file**, so the headers do the work:
+In class 7 `getOrganizerEvents` ignored the organizer's id, so every organizer saw every event. Now **every** query in `db/queries/dashboard.ts` filters by the owner:
 
 ```ts
-return new Response(ics, {
-  headers: {
-    'Content-Type': 'text/calendar; charset=utf-8',                // what it is
-    'Content-Disposition': `attachment; filename="${slug}.ics"`,   // download it, with this name
-  },
-});
+.where(eq(events.organizerId, organizerId))
 ```
 
-`lib/ics.ts` builds the text in the iCalendar format (escaping, folding long lines, UTC dates). A calendar app can import the file, so this is a good example of something **only a Route Handler** can do. The event page links to it with a plain `<a>` (not `<Link>`: it's a download, not a page).
+and the id comes from the **session** (`requireOrganizer()` returns the user, the page passes `organizer.id`), never from the URL or a form. This is the "owner in the `WHERE`" rule from class 7, applied to four queries.
 
----
+## 3.2 New SQL: aggregates for the stats tiles
 
-# Part 4 — Designing the response
+`getOrganizerStats` computes the numbers for the tiles. Two new tools:
 
-## 4.1 Never return a database row
+| Tool                                              | What it does                                                                                                   |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `count(*) FILTER (WHERE condition)`               | Counts **only the rows matching a condition**. One query produces several counts at once (published **and** drafts), instead of one query per number |
+| `coalesce(sum(...), 0)`                           | `SUM` of no rows is `NULL`. `coalesce` turns that into `0`, so an organizer with no sales sees `0`, not nothing |
 
-```ts
-return Response.json(event);   // ❌ tempting, and dangerous
-```
+The three small queries run in parallel with `Promise.all`, and `.mapWith(Number)` converts PostgreSQL's bigint counts (strings in JavaScript) to numbers, as in class 7.
 
-A row has internal ids and **whatever columns get added next year** (an email, a flag, a note). With `Response.json(row)`, every new column **leaks automatically**. So we pick the public fields **one by one** in `lib/to-public-event.ts`:
+`getRecentOrders` and `getRecentAttendees` use **joins** to walk from an order or ticket to the event and its organizer (a ticket doesn't know its event directly: ticket → ticket type → event), and always include the owner filter.
 
-```ts
-return { slug: event.slug, title: event.title, startsAt: event.startsAt.toISOString(), ... };
-```
+## 3.3 `createEvent` saves a ticket type
 
-That's a **whitelist**: a new column stays private until someone deliberately adds it. It also **decouples** the API from the database: renaming a column only changes the mapper, and the clients (which you don't control) keep working. (This is called a **DTO**, a data transfer object.)
+The create-event form already collected a **price** and a **quantity**. Before, the quantity was thrown away. Now the action inserts a `ticket_types` row ("General admission") **in the same transaction** as the event and its categories, so a new event can sell tickets right away (the Reserve buttons from class 7 read those rows). It also uses `getCurrentUser()` now instead of the demo organizer, and `demo-users.ts` and `mocks/` are gone.
 
-Look at what the mapper does besides hiding things:
+## 3.4 Smaller pieces
 
-| It does...                                | Because...                                                                  |
-| ----------------------------------------- | --------------------------------------------------------------------------- |
-| `startsAt.toISOString()`                  | JSON has no Date type. ISO 8601 is understood everywhere                    |
-| `fromPriceCents` (not `minPriceCents`)    | A name for what it means to a client (and still cents: the client formats it) |
-| `categories` as an array of **slugs**     | A client wants `['meetup']`, not whole database objects                     |
-| `venue` and `organizer` with 3 and 2 fields | No venue id or capacity, and **no organizer email**                       |
-| `links`                                   | Tells clients where to go next, so they don't build URLs themselves         |
-
-The query goes one step earlier: the organizer is loaded with only `id`, `name` and `handle` (`withDetails` in `db/queries/events.ts`), so the email never even leaves the database.
-
-## 4.2 One envelope, one error shape
-
-Success always has `data` at the top (room to add `meta` or `links` later without breaking anyone). **Errors always look the same**, so a client can handle them with one piece of code (`lib/api.ts`):
-
-```json
-{ "error": { "code": "not_found", "message": "No published event abc" } }
-{ "error": { "code": "invalid_query", "message": "Invalid query parameters", "details": { "formErrors": [], "fieldErrors": { "sort": ["Invalid option: expected one of ..."] } } } }
-```
-
-`code` is a short, stable word that code can switch on, `message` is for the developer reading it, and `details` is optional extra (here Zod's field errors).
-
-## 4.3 Pagination
-
-Never return "all of them". The list is paged (`page`), with `total` and `pageCount` so a client knows where the end is. `limit` is capped at **50** in the schema, so nobody can ask for a million rows in one request. (Right now `searchEvents` still uses its own fixed page size of 6 and ignores `limit`: Known issues.)
-
----
-
-# Part 5 — Validation and errors
-
-## 5.1 Strict for APIs, forgiving for pages
-
-You've seen the same Zod idea three times. The attitude differs on purpose:
-
-| | The `/events` **page** (`lib/event-filters.ts`) | The `/api/events` **API** (`route.ts`) |
-| --- | --- | --- |
-| Bad `?sort=garbage` | Quietly becomes the default. The visitor still sees a page | **400 Bad Request** with a message |
-| Unknown `?foo=1` | Ignored | **400** (`.strict()`) |
-| Why | A person typing in the address bar wants a page, not an error | A **program** can't read between the lines. A silent fix hides **its** bug |
-
-In code, the API schema has no `.catch(...)`, and the object is `.strict()`:
-
-```ts
-const Query = z.object({ sort: z.enum([...]).default('date'), page: z.coerce.number().int().min(1).default(1), ... }).strict();
-```
-
-`.default(x)` fills in a value when the param is **absent**. A **present but invalid** value still fails. That's the difference from `.catch`.
-
-## 5.2 The flow of a request
-
-```
-GET /api/events?sort=banana
-  1. Object.fromEntries(request.nextUrl.searchParams)   →  { sort: 'banana' }
-  2. Query.safeParse(...)                                →  { success: false, error }
-  3. return apiError(400, 'invalid_query', ..., z.flattenError(error))   →  HTTP 400 + the JSON error
-  (valid input)
-  3. searchEvents(filters)                               →  the rows
-  4. Response.json({ data: events.map(toPublicEvent), page, total, pageCount })
-```
-
-## 5.3 The status code is half of the error
-
-`apiError(404, ...)` should make the **HTTP status** 404. In this snapshot it doesn't: `status` is written **inside the JSON body**, and the real HTTP status stays **200**. A client sees "success" with an error hidden in the body. Run it and look:
-
-```bash
-curl -i http://localhost:3000/api/events/does-not-exist
-# HTTP/1.1 200 OK        ← should be 404
-# {"error":{"code":"not_found",...},"status":404}
-```
-
-The fix is one change in `lib/api.ts`: pass the status as the **second argument** of `Response.json`, not in the body (exercise 1).
-
----
-
-# Part 6 — Testing an API
-
-You don't need a front end to test an API:
-
-| Tool                                | How                                                                                       |
-| ----------------------------------- | ----------------------------------------------------------------------------------------- |
-| **The browser**                     | Open the URL. Great for `GET`. Chrome and Firefox pretty-print JSON                       |
-| **`curl`** (terminal)               | `curl http://localhost:3000/api/events`. Add **`-i`** to see the **status line and headers** |
-| **A client app**                    | [Bruno](https://www.usebruno.com/), [Postman](https://www.postman.com/) or the VS Code extension Thunder Client: save and replay requests |
-| **DevTools → Network**              | Shows every request the browser makes, with status, headers and body                      |
-
-Useful `curl` commands:
-
-```bash
-curl http://localhost:3000/api/events                              # the list
-curl "http://localhost:3000/api/events?q=next&sort=price&page=1"   # quote the URL: & means something to the shell
-curl -i http://localhost:3000/api/events/does-not-exist            # -i: show the status and headers
-curl -i "http://localhost:3000/api/events?sort=banana"             # should be 400
-curl -OJ http://localhost:3000/api/events/<slug>/calendar.ics      # download the file (-O save, -J use the server's file name)
-```
-
-**What to check** every time: the **status code**, the **`Content-Type`** header, and that the body contains **only** what you meant to expose.
-
----
-
-# Part 7 — Security checklist for an API
-
-A public API is a door for anyone, including people who mean harm. Before you ship an endpoint:
-
-1. ✅ **Validate every input** (query string, body, params) with a schema. Reject unknown fields.
-2. ✅ **Whitelist the output.** A mapper like `toPublicEvent`, never `Response.json(row)`.
-3. ✅ **Cap the page size** (`limit` max) so one request can't read the whole table or overload the server.
-4. ✅ **Don't confirm what you hide.** A draft event answers 404, not "403, it exists but you can't see it".
-5. ✅ **Use the right status codes**, so clients, caches and monitoring understand what happened.
-6. ✅ **Anything that changes data needs authentication and authorization** (class 7): read the session, check the role, and check **ownership**. This API is read-only and public, so it needs neither yet. A `POST /api/events` would need both, just like the Server Action.
-7. ✅ **Never put secrets in a response**, and don't leak internals in errors (a stack trace, the SQL, a file path).
-8. ✅ **Think about abuse.** A public endpoint can be hammered, so real APIs add **rate limiting**. Browsers also enforce **CORS** (which other websites may call your API from a browser). Neither is set up here.
+| What                                  | Where                                              | Notes                                                                     |
+| ------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------- |
+| shadcn `Dialog`                       | `components/ui/dialog.tsx`                         | Added with `npx shadcn@latest add dialog`                                 |
+| A "Get tickets" link on every card    | `components/event-card.tsx`                        | Goes to `/events/<slug>/tickets`: intercepted into a modal                |
+| `BackToEvent`, `TicketsForSlug`       | `events/[slug]/_components/`                        | Small async components that take the `params` Promise                     |
+| Nav link "Your events"                | `app/(dashboard)/layout.tsx`                       | The sidebar's first link                                                  |
 
 ---
 
 ## Known issues in this snapshot
 
-Run `npm run check` and call the API, and you'll meet these. Fix them in this order:
-
-| Problem                                                                      | Why / how to fix                                                                                  |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `npm run db:seed` fails: `Module not found: Can't resolve '@/node_modules/@types/pg'` (`db/seed.ts`) | An auto-import picked a path inside `node_modules/@types`. Use `import { Pool } from 'pg';` (class 7's seed has it right) |
-| **`apiError` sends HTTP 200** with the status inside the body (`lib/api.ts`) | Pass the status as the **second argument**: `Response.json({ error: ... }, { status })`. Check with `curl -i` |
-| **`GET /api/events` never returns the 400.** `apiError(...)` has no `return` (`app/api/events/route.ts`) | A bad query continues with `parsed.data` undefined and crashes with a 500. Write `return apiError(...)` |
-| **`limit` is accepted but ignored**                                          | `searchEvents` always uses `PAGE_SIZE` (6). Make the page size a parameter, or drop `limit` from the schema |
-| Unused import `error` from `'console'` (`lib/api.ts`)                        | A leftover auto-import. Delete the line (ESLint reports it)                                       |
-| `db/demo-users.ts` doesn't compile; `createEvent` still uses the demo organizer | The `users` table is gone since class 7. Switch the action to `requireOrganizer()` and delete the file |
-| Several protection gaps from class 7 (the new-event page, the dashboard query ignoring the owner) | See the *Known issues* of the [class 07 README](../class_07_auth/README.md#known-issues-in-this-snapshot) |
-| `npm run typecheck` fails in `mocks/` and `types/gatherly-event.ts`          | Unused leftovers importing types that no longer exist. Delete them                                |
-| Two files for the home page: `app/page.tsx` and an empty `app/(marketing)/page.tsx` | Move the hero into `(marketing)/page.tsx` and delete `app/page.tsx`                         |
+| Problem                                                                          | Why / how to fix                                                                                  |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `npm run db:seed` fails: `Can't resolve '@/node_modules/@types/pg'` (`db/seed.ts`) | An auto-import picked a path inside `node_modules/@types`. Use `import { Pool } from 'pg';`        |
+| **`createEvent` checks that someone is signed in, but not their role**, and throws an error when nobody is | Use `requireOrganizer('/dashboard/events/new')` (role check + redirect). Add the same call at the top of the **new-event page**, which has no guard at all |
+| The dashboard says "Signed in as JohnDoe"                                        | Hard-coded. Print `organizer.name`                                                                |
+| The Publish / Unpublish buttons do nothing                                       | Still a placeholder `<form action="">`. A Server Action that checks **ownership** goes here       |
+| Two files claim the home page: `app/page.tsx` and an empty `app/(marketing)/page.tsx` | One URL can't have two pages. Move the hero into `(marketing)/page.tsx` and delete `app/page.tsx` |
+| `npm run typecheck` fails in `types/gatherly-event.ts`                           | It imports types that no longer exist (`Event`, `User`) and nothing uses it. Delete the file      |
+| Lint: unused `error` import in `lib/api.ts`; the API still returns HTTP 200 for errors, forgets a `return`, and ignores `limit` | The class 8 issues. See the [class 08 README](../class_08_apis/README.md#known-issues-in-this-snapshot) |
+| `npm run format:check` fails on several files                                    | Run `npm run format` (it rewrites files with Prettier). Review the diff, then commit              |
+| Slot function named `StatusSlot` (a typo for `StatsSlot`)                        | Harmless: Next.js doesn't use the name. Rename it for clarity                                     |
 
 ---
 
 ## 🏋️ Try it yourself
 
-1. **Fix the status code.** Change `apiError` so the HTTP status is real. Check with `curl -i` that `/api/events/does-not-exist` gives `404 Not Found`. What did the client see before?
-2. **Fix the missing `return`.** Call `/api/events?sort=banana` before and after the fix. What status and body do you get each time?
-3. **Make `limit` work.** Let `searchEvents` take a page size (default 6). Does `/api/events?limit=3` return 3? Does `pageCount` still add up?
-4. **Read the JSON like a client.** Call `/api/events` and list every field you get. Which fields of the database row are **not** there? Open `toPublicEvent` and explain why each one is missing.
-5. **Add a field.** Add `capacity` (from the venue) to the public event. What did you have to change, and what **didn't** you have to touch?
-6. **Break it on purpose.** Call `/api/events?foo=1`, `?page=0`, `?page=abc`, `?limit=1000`. For each: what do you expect, and what do you get? Which Zod rule decides?
-7. **Download the calendar.** Fetch the `.ics` with `curl -i` and read the headers. Then open the file in your calendar app. What happens if you remove the `Content-Disposition` header?
-8. **Write a new endpoint.** `GET /api/categories` that returns `{ data: [{ name, slug }] }`. Use a whitelist mapper, and a real status code for errors.
-9. **Think.** Where would you put the `getCurrentUser()` check to make `POST /api/events` safe? What would it return to a visitor, and what to an attendee? (Hint: 401 and 403.)
-10. **Compare.** The same list exists as a page (`/events`) and as an API (`/api/events`). What do they share, and what is different? Why is it good that both call `searchEvents`?
+1. **See the panels load separately.** Add a 2-second delay to one slot's `page.tsx`. Which panels appear first? What did the delayed one show meanwhile, and which file provided it?
+2. **Break one panel.** Make `@orders/page.tsx` throw an error. What does the dashboard show? Which file made the other two panels survive? Press **Try again** after removing the error.
+3. **Remove a `default.tsx`.** Delete `@stats/default.tsx`, run `npm run dev`, and refresh `/dashboard`. What happens? Put it back.
+4. **Move a panel.** In `(overview)/layout.tsx` move `{attendees}` above the orders. Did you touch any slot? What does that tell you about slots?
+5. **Add a fourth panel.** Create `@upcoming` that shows the organizer's next 3 published events. List every file it needs, and what you have to change in the layout.
+6. **The catch-all.** Remove `@modal/[...catchAll]`, open the modal, then click **About**. Explain what you see. Put it back.
+7. **Check the URL math.** Why is the interceptor named `(.)events` and not `(..)events` or `(.)(marketing)`? Which two kinds of folders don't count?
+8. **Reuse the modal.** Make a new route that opens in a modal using the same `RouteModal` (for example `/events/[slug]/share`). Which three files do you need? What stays the same?
+9. **Hard vs soft.** Open the modal, copy the URL, and paste it in a private window. What's different, and why?
+10. **Think.** The panels each call `requireOrganizer()`. If you removed it from `@orders`, who could read the orders, and how? Which class taught you why?
 
 ---
 
 ## 🔗 Useful links
 
-**Route Handlers**
+**Next.js**
 
-- [`route.js` reference](https://nextjs.org/docs/app/api-reference/file-conventions/route) — methods, `RouteContext`, caching, cookies and headers
-- [Next.js: Route Handlers](https://nextjs.org/docs/app/getting-started/route-handlers) and [Backend for Frontend](https://nextjs.org/docs/app/guides/backend-for-frontend)
-- [`NextRequest`](https://nextjs.org/docs/app/api-reference/functions/next-request) and [`NextResponse`](https://nextjs.org/docs/app/api-reference/functions/next-response)
-- MDN: [`Request`](https://developer.mozilla.org/en-US/docs/Web/API/Request), [`Response`](https://developer.mozilla.org/en-US/docs/Web/API/Response) and [`Response.json()`](https://developer.mozilla.org/en-US/docs/Web/API/Response/json_static)
+- [Parallel Routes](https://nextjs.org/docs/app/api-reference/file-conventions/parallel-routes) and [`default.js`](https://nextjs.org/docs/app/api-reference/file-conventions/default)
+- [Intercepting Routes](https://nextjs.org/docs/app/api-reference/file-conventions/intercepting-routes)
+- [Route Groups](https://nextjs.org/docs/app/api-reference/file-conventions/route-groups), [`loading.js`](https://nextjs.org/docs/app/api-reference/file-conventions/loading) and [`error.js`](https://nextjs.org/docs/app/api-reference/file-conventions/error)
+- [Linking and navigating](https://nextjs.org/docs/app/getting-started/linking-and-navigating) (soft vs hard navigation, client-side transitions)
+- [`useRouter`](https://nextjs.org/docs/app/api-reference/functions/use-router)
 
-**HTTP and API design**
+**UI and accessibility**
 
-- MDN: [HTTP overview](https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview), [request methods](https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods), [status codes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status) and [`Content-Disposition`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Disposition)
-- [JSON](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting/JSON) (MDN) and [ISO 8601 dates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toISOString)
-- [REST API design: the basics](https://restfulapi.net/) and [CORS explained](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS) (MDN)
-- [iCalendar (RFC 5545)](https://datatracker.ietf.org/doc/html/rfc5545), the format behind the `.ics` file
+- [shadcn/ui Dialog](https://ui.shadcn.com/docs/components/dialog) and [Base UI Dialog](https://base-ui.com/react/components/dialog)
+- MDN: [the `<dialog>` element and focus management](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dialog) and [ARIA dialog role](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/dialog_role)
 
-**Validation and security**
+**SQL**
 
-- [Zod: `.strict()`, `.default()` and `.catch()`](https://zod.dev/api) and [error formatting](https://zod.dev/error-formatting)
-- OWASP: [REST security cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html) and [API security top 10](https://owasp.org/API-Security/)
-
-**Tools**
-
-- [Bruno](https://www.usebruno.com/) and [Postman](https://www.postman.com/) (API clients), and the [`curl` manual](https://curl.se/docs/manpage.html)
+- PostgreSQL: [aggregate expressions (`FILTER`)](https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-AGGREGATES) and [`COALESCE`](https://www.postgresql.org/docs/current/functions-conditional.html#FUNCTIONS-COALESCE-NVL-IFNULL)
+- [Drizzle: joins](https://orm.drizzle.team/docs/joins) and [`sql` operator](https://orm.drizzle.team/docs/sql)
 
 **Previous classes**
 
-- [Class 07 README](../class_07_auth/README.md): authentication, ticket reservation, error pages and the `.ics` route
-- [Class 06 README](../class_06_forms/README.md): Server Actions and their security checklist
-- [Class 04 README](../class_04_routing/README.md): the queries layer and `searchEvents`
+- [Class 08 README](../class_08_apis/README.md): Route Handlers and the public API
+- [Class 07 README](../class_07_auth/README.md): authentication, ownership, tickets and error pages
+- [Class 06 README](../class_06_forms/README.md): forms and Server Actions

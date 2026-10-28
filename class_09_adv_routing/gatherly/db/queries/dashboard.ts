@@ -1,28 +1,29 @@
 /**
- * QUERIES for the organizer dashboard — the events an organizer manages.
+ * QUERIES for the organizer dashboard — everything an organizer sees about THEIR events.
  *
- * Unlike the public queries (db/queries/events.ts), this one is NOT limited to published events:
- * an organizer must see their drafts too. That's why the dashboard has its own query file.
+ * Unlike the public queries (db/queries/events.ts), these are NOT limited to published events: an organizer
+ * must see their drafts too. That's why the dashboard has its own query file.
  *
- * ⚠️ AUTHORIZATION GAP: the dashboard page now passes the signed-in organizer's id, but
- * `getOrganizerEvents` still IGNORES it: the `where` that would limit the list to that
- * organizer is commented out. So every organizer sees EVERY organizer's events, drafts included.
- * That's a data leak ("broken access control", the #1 web security risk). The fix is to
- * restore the `where` (it's one line) and test it with two organizers.
+ * ✅ The authorization rule, applied in EVERY query below: filter by the OWNER. `events.organizerId =
+ * <the signed-in user's id>` is in each `where`. The id comes from the session (the page calls
+ * requireOrganizer and passes `organizer.id`), never from the URL or a form. This is what stops one organizer from
+ * reading another's events, orders or attendees ("broken access control", the #1 web security risk).
+ * (In class 7 `getOrganizerEvents` ignored it. It's fixed now.)
  *
- * The rule to remember: authentication gets you IN, but every query that returns or changes
- * user-owned data must also filter by the owner.
+ * Several of these feed the PARALLEL ROUTE panels of the dashboard (app/(dashboard)/dashboard/(overview)/@...):
+ * getOrganizerStats -> @stats, getRecentOrders -> @orders, getRecentAttendees -> @attendees.
  */
-// Heads-up: `eq` isn't used yet (it belongs to the commented-out `where` below), and ESLint reports it.
+// `and` joins conditions, `sql` is for raw SQL fragments the builder has no helper for (aggregates below).
 import { desc, eq, asc, and, sql } from 'drizzle-orm';
 import { db } from '..';
 import { categories, events, orders, tickets, ticketTypes, venues } from '../schema';
+// The auth `user` table: we join it to show the BUYER's name on an order.
 import { user } from '../auth-schema';
 
-// `organizerId` is accepted already (the app will pass the signed-in user's id), but it isn't
-// used yet, which is why ESLint reports it as an unused argument.
+// The organizer's own events, drafts included. `organizerId` MUST be the signed-in user's id.
 export async function getOrganizerEvents(organizerId: string) {
   return db.query.events.findMany({
+    // The ownership filter: only rows that belong to this organizer.
     where: eq(events.organizerId, organizerId),
     // Newest first: what the organizer just created is at the top.
     orderBy: desc(events.createdAt),
@@ -60,6 +61,9 @@ export async function getEventFormOptions() {
   };
 }
 
+// The latest people with a PAID ticket for this organizer's events (feeds the @attendees panel).
+// Path: ticket -> its ticket type -> its event, and ticket -> its order. A ticket doesn't know its event
+// directly, so we JOIN through ticket_types. `limit = 10` is a default parameter: a panel needs a handful, not all.
 export async function getRecentAttendees(organizerId: string, limit = 10) {
   return db
     .select({
@@ -72,30 +76,41 @@ export async function getRecentAttendees(organizerId: string, limit = 10) {
     .innerJoin(ticketTypes, eq(ticketTypes.id, tickets.ticketTypeId))
     .innerJoin(events, eq(events.id, ticketTypes.eventId))
     .innerJoin(orders, eq(orders.id, tickets.orderId))
+    // Owner AND paid: someone with an unpaid reservation isn't an attendee yet.
     .where(and(eq(events.organizerId, organizerId), eq(orders.status, 'paid')))
     .orderBy(desc(orders.createdAt))
     .limit(limit);
 }
 
+// The latest orders on this organizer's events, with the buyer's name (feeds the @orders panel).
 export async function getRecentOrders(organizerId: string, limit = 10) {
   return db
     .select({
       id: orders.id,
       createdAt: orders.createdAt,
       status: orders.status,
+      // Renamed on the way out: the column is `totalCent` (singular), the panel reads `totalCents`.
       totalCents: orders.totalCent,
       eventTitle: events.title,
       buyer: user.name,
     })
     .from(orders)
     .innerJoin(events, eq(events.id, orders.eventId))
+    // INNER JOIN: an order always has a buyer and an event, so no rows are lost.
     .innerJoin(user, eq(user.id, orders.userId))
     .where(eq(events.organizerId, organizerId))
     .orderBy(desc(orders.createdAt))
     .limit(limit);
 }
 
+// The numbers for the tiles on top of the dashboard (feeds the @stats panel): how many events are published or
+// drafts, how many tickets are paid or pending, and the revenue.
+//
+// A new SQL tool here: `count(*) FILTER (WHERE condition)` counts only the rows matching the condition, so ONE
+// query can produce several counts at once (published AND drafts) instead of running one query per number.
+// `.mapWith(Number)` converts PostgreSQL's bigint count, which node-postgres returns as a string, to a number.
 export async function getOrganizerStats(organizerId: string) {
+  // Independent queries run in PARALLEL (Promise.all): the panel waits for the slowest, not for the sum.
   const [eventCounts, ticketCounts] = await Promise.all([
     db
       .select({
@@ -116,6 +131,7 @@ export async function getOrganizerStats(organizerId: string) {
           sql<number>`count(${tickets.id}) filter (where ${orders.status} = 'pending')`.mapWith(
             Number,
           ),
+        // Commented out: counting check-ins needs a check-in table that doesn't exist yet.
         // checkedIn: sql<number>`count(${checkIns.id})`.mapWith(Number),
       })
       .from(tickets)
@@ -125,6 +141,8 @@ export async function getOrganizerStats(organizerId: string) {
       .where(eq(events.organizerId, organizerId)),
   ]);
 
+  // Revenue: the sum of PAID orders. `coalesce(sum(...), 0)`: SUM of no rows is NULL in SQL, and coalesce turns
+  // that NULL into 0, so an organizer with no sales sees 0 instead of nothing.
   const [revenue] = await db
     .select({
       cents: sql<number>`coalesce(sum(${orders.totalCent}), 0)`.mapWith(Number),
@@ -133,6 +151,9 @@ export async function getOrganizerStats(organizerId: string) {
     .innerJoin(events, eq(events.id, orders.eventId))
     .where(and(eq(events.organizerId, organizerId), eq(orders.status, 'paid')));
 
+  // Merge the three small results into one object. `eventCounts[0]` is the single aggregate row (an aggregate
+  // without GROUP BY always returns exactly one row). `?.` and `?? 0` because noUncheckedIndexedAccess says
+  // an array element may be undefined.
   return {
     ...eventCounts[0],
     ...ticketCounts[0],

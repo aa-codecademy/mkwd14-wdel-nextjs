@@ -11,6 +11,10 @@
  *
  * The folder is `(dashboard)/dashboard/` because the group name never shows in the URL.
  * The inner `dashboard` folder is what gives us `/dashboard`.
+ *
+ * Inside it there's a second group, `(overview)`, with PARALLEL ROUTES (the stats, orders and attendees
+ * panels). It has its own layout for those panels, nested INSIDE this one. So the nesting for /dashboard is:
+ *   RootLayout > this sidebar layout > (overview)/layout.tsx (the panels) > the events list
  */
 import Link from 'next/link';
 import type { ReactNode } from 'react';

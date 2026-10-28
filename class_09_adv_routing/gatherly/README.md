@@ -1,8 +1,8 @@
-# Gatherly — class 08 snapshot: Route Handlers and a public API
+# Gatherly — class 09 snapshot: advanced routing
 
-The course application in class 8: everything from class 7 (sign-in, roles, ticket reservation, error pages) plus a small **public JSON API** built with **Route Handlers**: `GET /api/events` (search, filters, pagination) and `GET /api/events/[slug]`, next to the calendar download. The design is right (strict validation, a whitelist of public fields, one error format), but two bugs stop errors from working correctly. They're listed in the class README.
+The course application in class 9: everything from class 8 (sign-in, tickets, the public API) plus **parallel routes** (the organizer dashboard is assembled from independent `@stats`, `@orders` and `@attendees` panels, each with its own skeleton and error page) and an **intercepting route** (the "Get tickets" button opens a modal that has its own URL). The dashboard queries are now filtered by the owner, and `createEvent` saves a ticket type.
 
-> 📘 **What's new and why?** The full explanation (what an API is, Route Handlers step by step, response design, validation and errors, testing with `curl`, an API security checklist), run instructions, known issues and exercises are in the **[class 08 README](../README.md)**. Sign-in, tickets and error pages are in the **[class 07 README](../../class_07_auth/README.md)**. Forms and Server Actions are in the **[class 06 README](../../class_06_forms/README.md)**, and PostgreSQL setup in the **[class 03 README](../../class_03_db/README.md)**.
+> 📘 **What's new and why?** The full explanation (parallel routes, `default.tsx`, intercepting routes, the modal, the new queries), run instructions, known issues and exercises are in the **[class 09 README](../README.md)**. The API is in the **[class 08 README](../../class_08_apis/README.md)**, sign-in and tickets in the **[class 07 README](../../class_07_auth/README.md)**. Forms and Server Actions are in the **[class 06 README](../../class_06_forms/README.md)**, and PostgreSQL setup in the **[class 03 README](../../class_03_db/README.md)**.
 
 | Route                                                 | File                                              | Who may open it                     |
 | ----------------------------------------------------- | ------------------------------------------------- | ----------------------------------- |
@@ -10,15 +10,16 @@ The course application in class 8: everything from class 7 (sign-in, roles, tick
 | [/events](http://localhost:3000/events), `/events/[slug]`, [/about](http://localhost:3000/about) | `app/(marketing)/...` | everyone                          |
 | [/sign-in](http://localhost:3000/sign-in), [/sign-up](http://localhost:3000/sign-up) | `app/(marketing)/sign-in/`, `sign-up/` | everyone (the GitHub button needs the env values) |
 | `/organizers-only`                                    | `app/(marketing)/organizers-only/page.tsx`        | the "not allowed" page for attendees |
-| [/dashboard](http://localhost:3000/dashboard)         | `app/(dashboard)/dashboard/page.tsx`              | **organizers and admins** (`requireOrganizer`) |
+| [/dashboard](http://localhost:3000/dashboard)         | `app/(dashboard)/dashboard/(overview)/` (layout + page + `@stats`, `@orders`, `@attendees` slots) | **organizers and admins** (`requireOrganizer`, repeated in every slot) |
 | [/dashboard/events/new](http://localhost:3000/dashboard/events/new) | `app/(dashboard)/dashboard/events/new/page.tsx` | meant for organizers, ⚠️ **not guarded yet** |
 | `/api/auth/*`                                         | `app/api/auth/[...all]/route.ts`                  | Better Auth's own endpoints (sign-in, sign-out, GitHub callback) |
+| `/events/[slug]/tickets` **(modal or page)**          | `app/(marketing)/@modal/(.)events/[slug]/tickets/page.tsx` (modal) and `events/[slug]/tickets/page.tsx` (full page) | everyone sees it; **signing in is needed to reserve** |
 | `/events/[slug]` (tickets part)                       | `.../events/[slug]/_components/`, `app/actions/tickets.ts` | anyone sees availability; **signing in is needed to reserve** |
 | `/api/events/[slug]/calendar.ics`                     | `app/api/events/[slug]/calendar.ics/route.ts`     | everyone (a calendar file download)  |
 | `GET /api/events`                                     | `app/api/events/route.ts`                         | **NEW:** everyone (public, read-only JSON: search, filters, pagination) |
 | `GET /api/events/[slug]`                              | `app/api/events/[slug]/route.ts`                  | **NEW:** everyone (one event, as JSON)  |
 
-> ⚠️ A few things are unfinished in this snapshot: the create-event form still uses the old demo organizer, the dashboard query ignores the owner, and two files claim the home page. Each one is listed with its fix in the *Known issues* of the [class 07 README](../README.md).
+> ⚠️ Small gaps remain: `createEvent` checks that someone is signed in but not their role, the new-event page has no guard, the Publish button is a placeholder, and two files claim the home page. See the *Known issues* of the [class 09 README](../README.md).
 
 ## 🚀 Quick start
 
@@ -54,57 +55,53 @@ Open [http://localhost:3000/events](http://localhost:3000/events).
 
 ```
 gatherly/
-├── proxy.ts                    ← NEW: runs before /dashboard/*: no session cookie → redirect to /sign-in (only a first filter!)
+├── proxy.ts                    ← runs before /dashboard/*: no session cookie → redirect to /sign-in (only a first filter!)
 ├── app/
 │   ├── layout.tsx              ← root layout: only <html>, <body>, fonts, metadata
 │   ├── page.tsx                ← the landing page (should move into (marketing), see the class README)
-│   ├── api/auth/[...all]/route.ts  ← NEW: Better Auth's HTTP endpoints (sign-in, sign-out, GitHub callback)
+│   ├── global-error.tsx        ← the last-resort error page (replaces the root layout)
+│   ├── actions/                ← events.ts (`createEvent`: session + ticket type), tickets.ts (`reserveTicket`)
+│   ├── api/                    ← auth/[...all] (Better Auth), events/ (the public JSON API, class 8, ⚠️ bugs)
 │   ├── (marketing)/            ← route group: the public site (not part of the URL)
-│   │   ├── layout.tsx          ← header + footer
-│   │   ├── sign-in/, sign-up/  ← NEW: the sign-in and sign-up pages (server pages around <AuthForm>)
-│   │   ├── organizers-only/    ← NEW: the "403" page for signed-in attendees
-│   │   ├── _components/        ← NEW: auth.form.tsx (GitHub button), safe-next.ts (open-redirect guard)
-│   │   ├── about/, events/     ← events: filters, search, pagination, details (see class 4 and 6)
-│   │   ├── events/error.tsx    ← NEW: the error page for /events and everything below it
-│   │   ├── events/[slug]/_components/  ← NEW: tickets-list, reserve-button (optimistic), your-tickets, skeleton
+│   │   ├── layout.tsx          ← header + footer, renders {children} AND {modal}
+│   │   ├── @modal/             ← NEW: parallel route slot for the tickets modal
+│   │   │   ├── default.tsx                       ← no modal
+│   │   │   ├── [...catchAll]/page.tsx            ← closes the modal on any other URL
+│   │   │   └── (.)events/[slug]/tickets/page.tsx ← the INTERCEPTING route: the modal
+│   │   ├── events/             ← list (filters, pagination), details, error.tsx, _components/
+│   │   │   └── [slug]/tickets/page.tsx           ← NEW: the full-page version of "Get tickets"
+│   │   ├── sign-in/, sign-up/, organizers-only/, about/, _components/
 │   │   └── ...
 │   └── (dashboard)/            ← route group: the organizer area
 │       ├── layout.tsx          ← sidebar
-│       └── dashboard/          ← "/dashboard" (guarded by requireOrganizer) and events/new (the form)
-├── app/actions/events.ts       ← Server Action `createEvent` (still the demo organizer ⚠️)
-├── app/actions/tickets.ts      ← NEW: Server Action `reserveTicket` (transaction + row lock against overselling)
-├── app/global-error.tsx        ← NEW: the last-resort error page (replaces the root layout)
-├── app/api/events/route.ts, app/api/events/[slug]/route.ts  ← NEW (class 8): the public JSON API (⚠️ two bugs, see the class README)
+│       └── dashboard/
+│           ├── (overview)/     ← NEW: route group that scopes the panels to "/dashboard" only
+│           │   ├── layout.tsx  ← NEW: receives the slots as props and arranges them
+│           │   ├── page.tsx    ← the list of the organizer's events
+│           │   ├── default.tsx ← NEW: fallback for `children`
+│           │   └── @stats/, @orders/, @attendees/  ← NEW: PARALLEL ROUTES (page, loading, error, default each)
+│           └── events/new/     ← the create-event form (not wrapped by the panels)
 ├── components/
-│   ├── account-menu.tsx        ← NEW (client): Sign in, or name + Dashboard + Sign out (useSession)
-│   ├── header.tsx              ← renders <AccountMenu />
-│   ├── submit-button.tsx, event-*.tsx, favourite-button.tsx, footer.tsx
-│   └── ui/                     ← shadcn/ui components
+│   ├── route-modal.tsx         ← NEW (client): a dialog whose open state is the URL (closes with router.back())
+│   ├── account-menu.tsx        ← (client) Sign in, or name + Dashboard + Sign out (useSession)
+│   ├── event-card.tsx          ← now has a "Get tickets" link (intercepted into the modal)
+│   ├── header.tsx, footer.tsx, submit-button.tsx, event-*.tsx, favourite-button.tsx
+│   └── ui/                     ← shadcn/ui components (dialog is new)
 ├── db/
-│   ├── auth.ts                 ← NEW: the Better Auth server config (GitHub, passwords, roles). Server-only
-│   ├── auth-schema.ts          ← NEW: the auth tables (user, session, account, verification)
-│   ├── schema.ts               ← our tables; `events.organizerId` and `orders.userId` now point at the auth `user`
-│   ├── index.ts                ← the `db` client (server-only)
-│   ├── queries/                ← events.ts, dashboard.ts (⚠️ ignores the owner), tickets.ts (NEW: availability)
-│   ├── demo-users.ts           ← OBSOLETE (the old "pretend login"; delete it once actions use the session)
-│   └── seed.ts                 ← resets and fills the database (inserts `user` rows, no passwords)
-├── lib/
-│   ├── auth-client.ts          ← NEW: the browser-side auth client (signIn, signOut, useSession)
-│   ├── session.ts              ← NEW: getCurrentUser, requireUser, requireOrganizer: the server-side guards
-│   ├── roles.ts                ← NEW: parseRole, canManageEvents
-│   ├── api.ts                  ← NEW (class 8): `apiError`, the one error format of the API
-│   ├── to-public-event.ts      ← NEW (class 8): the whitelist mapper from a database event to the public JSON shape
-│   ├── ics.ts                  ← builds the iCalendar (.ics) text
-│   ├── event-filters.ts, format.ts, utils.ts
-├── types/role.ts               ← NEW: 'attendee' | 'organizer' | 'admin'
-├── drizzle/                    ← migrations. 0004 adds the auth tables and replaces `users`
-├── mocks/, types/gatherly-event.ts  ← LEGACY: unused, and they break `typecheck`
-└── package.json                ← new packages: better-auth, @better-auth/drizzle-adapter
+│   ├── auth.ts, auth-schema.ts ← Better Auth config and its tables
+│   ├── schema.ts, index.ts, seed.ts
+│   └── queries/                ← events.ts, tickets.ts, dashboard.ts (NEW: owner-filtered stats, orders, attendees)
+├── lib/                        ← session.ts (guards), roles.ts, auth-client.ts, api.ts, to-public-event.ts, ics.ts, ...
+├── types/gatherly-event.ts     ← LEGACY: unused, and it breaks `typecheck` (delete it)
+├── drizzle/                    ← migrations
+└── package.json
 ```
+
 
 ## 🔗 Links
 
-- [Class 08 README](../README.md) — Route Handlers, the public API, response design, testing, known issues, exercises
+- [Class 09 README](../README.md) — parallel routes, intercepting routes, the modal, known issues, exercises
+- [Class 08 README](../../class_08_apis/README.md) — Route Handlers and the public API
 - [Class 07 README](../../class_07_auth/README.md) — sessions, OAuth, roles, Better Auth, tickets, error pages
 - [Class 06 README](../../class_06_forms/README.md) — forms and Server Actions
 - [Class 03 README](../../class_03_db/README.md) — PostgreSQL and Drizzle setup
