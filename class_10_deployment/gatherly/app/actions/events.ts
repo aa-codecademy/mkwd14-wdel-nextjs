@@ -30,16 +30,18 @@
 import { z } from 'zod';
 // `db` is marked `server-only`. That's fine here: this file only ever runs on the server.
 import { db } from '../../db';
+// `and` joins conditions (class 10: setEventStatus needs "this id AND my event").
 import { and, eq } from 'drizzle-orm';
 import { eventCategories, events, ticketTypes, venues } from '../../db/schema';
-// ⚠️ Still the "pretend login" from class 6 (see db/demo-users.ts). Real sign-in exists now (class 7), but
-// this action hasn't been switched over yet, and demo-users.ts no longer compiles (the `users` table
-// is gone). Replace it with `requireOrganizer()` from lib/session.ts. See the class 07 README.
+// The real session (class 9): the demo-user file is gone. `getCurrentUser()` returns the signed-in user, or null.
+// (`requireOrganizer()` would also check the role, see the note in step 1 of createEvent below.)
 // redirect(): send the browser to another page. See the end of createEvent.
 import { redirect } from 'next/navigation';
 // revalidatePath(): tell Next.js that a page's data is out of date. See the end of createEvent.
 import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from '../../lib/session';
+// NEW in class 10, for setEventStatus: `canManageEvents` = "is this role organizer or admin?", and
+// `parseRole` turns the user's role text into a safe Role value ('attendee' if unknown).
 import { canManageEvents, parseRole } from '../../lib/roles';
 
 // STEP 1 of the design: describe what a VALID form looks like, once, as a Zod schema.
@@ -102,11 +104,13 @@ export async function createEvent(
   _prev: CreateEventState,
   formData: FormData,
 ): Promise<CreateEventState> {
-  // 1. AUTHENTICATE + AUTHORIZE: who is asking, and may they do this? Today: a fixed demo organizer.
-  //    The real version is one line:  `const organizer = await requireOrganizer('/dashboard/events/new');`
-  //    It reads the session from the cookie, and sends anyone who isn't a signed-in organizer away.
-  //    Until then, NOBODY is checked: this endpoint, as a public POST, accepts anyone. (The proxy and
-  //    the page only protect the PAGE, not this action. A page-level check never covers the actions.)
+  // 1. AUTHENTICATE: who is asking? The session says so. The owner of the new event is THIS user, taken from
+  //    the server (never from a form field). A page-level check never covers an action: the proxy and the
+  //    page protect the PAGE, and this function is its own public endpoint, so it checks by itself.
+  //    ⚠️ Two gaps remain: it only checks that SOMEONE is signed in, not their ROLE (a signed-in attendee
+  //    could post here directly), and a missing user THROWS, which shows the error page. The stronger
+  //    version is `const organizer = await requireOrganizer('/dashboard/events/new');` (role + redirect).
+  //    (Compare with setEventStatus at the bottom of this file: it DOES check the role.)
   const organizer = await getCurrentUser();
 
   if (!organizer) {
@@ -143,8 +147,8 @@ export async function createEvent(
 
   // From here on `parsed.data` is CLEAN and TYPED: real Date objects, real numbers, real arrays.
   // Split off the pieces that don't go into the `events` table as they are.
-  // (⚠️ `quantity` is read but not used yet: it will become the number of tickets in the
-  //  `ticket_types` table, which this action doesn't fill in this version. ESLint reports it.)
+  // `price` and `quantity` become the event's first TICKET TYPE (inserted below, in the transaction).
+  // The `events` row itself only keeps the lowest price (`minPriceCents`).
   const { price, quantity, categoryIds, ...input } = parsed.data;
 
   // 4. AUTHORIZE / CHECK THE WORLD: the shape of `venueId` is valid, but does that venue exist?
@@ -183,6 +187,9 @@ export async function createEvent(
     // transaction makes it roll back.
     if (!insertedEvent) throw new Error('Issue while creating event');
 
+    // A single default ticket type, built from the form's price and quantity, so the event can sell tickets right
+    // away (the Reserve buttons read these rows). Inside the same transaction: the event, its ticket
+    // type and its categories are created together or not at all.
     await tx
       .insert(ticketTypes)
       .values({ eventId: insertedEvent.id, name: 'General admission', priceCents, quantity });
@@ -231,12 +238,22 @@ async function uniqueSlug(title: string) {
   return taken ? `${base}-${crypto.randomUUID().slice(0, 6)}` : base;
 }
 
+// NEW in class 10: publish or unpublish an event (draft <-> published) from the dashboard.
+// Remember: this is exported from a 'use server' file, so it is a PUBLIC endpoint. Whoever calls it can pass ANY
+// eventId and ANY status, which is why every step below re-checks instead of trusting the caller.
+// The order is the same as in createEvent: authenticate/authorize -> validate -> change data -> revalidate.
+// (It returns nothing on failure: a silent no-op. A friendlier version would return a message.)
 export async function setEventStatus(eventId: string, status: 'draft' | 'published') {
+  // 1. AUTHENTICATE + AUTHORIZE (ROLE): signed in AND allowed to manage events (organizer or admin).
+  //    An ordinary attendee who calls this action directly is stopped here.
   const user = await getCurrentUser();
   if (!user || !canManageEvents(user.role)) {
     return;
   }
 
+  // 2. VALIDATE the arguments. TypeScript types vanish at runtime, so `'draft' | 'published'` protects
+  //    nobody against a hand-made request: it could send 'cancelled' or a made-up id. Zod checks the real
+  //    values: `z.enum` allows only these two statuses, `z.uuid()` rejects anything that isn't an id.
   const input = z.object({ eventId: z.uuid(), status: z.enum(['draft', 'published']) }).safeParse({
     eventId,
     status,
@@ -248,6 +265,12 @@ export async function setEventStatus(eventId: string, status: 'draft' | 'publish
 
   const isAdmin = parseRole(user.role) === 'admin';
 
+  // 3. AUTHORIZE (OWNERSHIP) + CHANGE DATA in ONE statement. This is the important part: knowing that you are an
+  //    organizer isn't enough, the event must also be YOURS. So an organizer's `where` is "this id AND
+  //    organizerId = me" (without the second condition any organizer could publish or unpublish anybody's
+  //    event just by passing its id, an IDOR). An admin may manage every event, so only the id is used.
+  //    Doing the check inside the UPDATE (instead of "select, check, update") also avoids a race between
+  //    the check and the write.
   const [updated] = await db
     .update(events)
     .set({ status: input.data.status })
@@ -256,11 +279,17 @@ export async function setEventStatus(eventId: string, status: 'draft' | 'publish
         ? eq(events.id, input.data.eventId)
         : and(eq(events.id, input.data.eventId), eq(events.organizerId, user.id)),
     )
+    // `.returning(...)` gives back the changed rows: an EMPTY array means no row matched.
     .returning({ slug: events.slug });
 
+  // Nothing matched: the event doesn't exist OR belongs to somebody else. We deliberately treat both the same,
+  // so a caller can't use this action to find out which ids exist.
   if (!updated) {
     return;
   }
 
+  // 4. REVALIDATE: the dashboard list shows each event's status, so it must be rendered again.
+  //    (`updated.slug` is selected but unused: the public /events/[slug] page, which also shows published
+  //    events, isn't revalidated here. It's a possible improvement.)
   revalidatePath('/dashboard');
 }

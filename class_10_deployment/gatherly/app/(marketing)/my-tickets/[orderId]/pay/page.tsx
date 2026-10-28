@@ -1,3 +1,11 @@
+/**
+ * ROUTE: /my-tickets/[orderId]/pay   — the (mock) checkout for one pending order.
+ *
+ * `[orderId]` is a dynamic segment: the order's id from the URL. That id comes from the browser, so it is
+ * UNTRUSTED input. Like other pages here, we pass the `params` Promise to a child (<Checkout>) inside
+ * <Suspense> without awaiting it. <Checkout> validates the id, loads the order AND checks it belongs to the
+ * signed-in user. The page only lays things out.
+ */
 import { Suspense } from 'react';
 import { Checkout } from '../../_components/checkout';
 

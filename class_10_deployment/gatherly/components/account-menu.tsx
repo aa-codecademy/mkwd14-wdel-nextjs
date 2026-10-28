@@ -40,6 +40,8 @@ export function AccountMenu() {
   return (
     <div className="flex items-center gap-4">
       {/* The role comes with the session, typed thanks to `adminClient()` in lib/auth-client.ts. */}
+      {/* Any signed-in user has tickets, so this link is not role-gated. The page itself still calls
+          requireUser() (see my-tickets/_components/ticket-list.tsx): the link is a courtesy, not the lock. */}
       <Link href="/my-tickets" className="hover:text-brand-500">
         My tickets
       </Link>

@@ -21,6 +21,8 @@
 
 // `details?: unknown` = anything (we use Zod's field errors). The spread `...(details ? { details } : {})`
 // adds the `details` key ONLY when there is something to say, so the JSON has no `"details": null`.
+// Class 10 note: the unused `import { error } from 'console'` that class 9 flagged was deleted.
+// The status bug above is STILL here: callers pass a status, but the response is sent as 200.
 export function apiError(status: number, code: string, message: string, details?: unknown) {
   // `Response.json(body, init)` is the standard way to answer with JSON: it sets the Content-Type header for
   // us. The HTTP status belongs in `init` (the 2nd argument), see the note at the top of this file.

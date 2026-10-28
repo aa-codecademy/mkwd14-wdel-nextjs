@@ -33,12 +33,13 @@ import {
 import { user } from './auth-schema';
 
 // A PostgreSQL ENUM: a column that can only hold one of these values. The database itself
-// rejects anything else. Heads-up: the spelling here is 'cancelled' (two l's), while the
-// older types/event-status.ts used 'canceled'. The database spelling is the one that counts.
+// rejects anything else. The spelling is 'cancelled' (two l's) and it matches types/event-status.ts
+// (an older version of that file said 'canceled'). The database spelling is the one that counts.
 export const eventStatus = pgEnum('event_status', ['draft', 'published', 'cancelled']);
-// The lifecycle of an ORDER. Heads-up on spelling: events use 'cancelled' (two l's) but orders use
-// 'canceled' (one l). Both are valid English, and mixing them is an easy typo trap, so copy them
-// exactly when you write code that compares or inserts these values.
+// The lifecycle of an ORDER. Spelling: events AND orders now both use 'cancelled' (two l's).
+// Until migration 0006 orders used 'canceled' (one l), which was an easy typo trap next to the
+// events enum. 0006 renamed the value so the whole app spells it one way: copy it exactly when
+// you write code that compares or inserts these values.
 export const orderStatus = pgEnum('order_status', ['pending', 'paid', 'refunded', 'cancelled']);
 
 export const categories = pgTable('categories', {
@@ -117,9 +118,9 @@ export const eventCategories = pgTable(
 //   users  ──< orders >── events     one purchase by one user for one event
 //   orders ──< tickets >── ticket_types   the individual tickets, each with its own code
 //
-// The migration drizzle/0003_*.sql creates these three tables (+ the order_status type). Nothing
-// reads or writes them yet. The "New event" form even collects a ticket quantity that isn't saved.
-// They're here so the next features (reserving tickets, the QR-code check-in) have somewhere to go.
+// The migration drizzle/0003_*.sql creates these three tables (+ the order_status type). Today they
+// are in use: the "New event" form saves a first ticket type, the Reserve/checkout flow creates
+// orders and tickets, and check-in (below) builds on the ticket `code`.
 export const ticketTypes = pgTable('ticket_types', {
   id: uuid().primaryKey().defaultRandom(),
   eventId: uuid()
@@ -164,18 +165,33 @@ export const tickets = pgTable('tickets', {
   attendeeName: text().notNull(),
 });
 
+// NEW in class 10 (migration 0005): API TOKENS. A token is a long secret string an organizer gives to a
+// device or script (e.g. the tablet at the door) so it can call our API WITHOUT a browser login/cookie.
+// Created in lib/api-tokens.ts; listed on the dashboard by getApiTokens (db/queries/dashboard.ts).
 export const apiTokens = pgTable('api_tokens', {
   id: uuid().primaryKey().defaultRandom(),
+  // Whose token it is. `cascade`: delete the organizer and their tokens disappear with them,
+  // so no orphan token can keep working for a user that no longer exists.
   organizerId: text()
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
+  // SECURITY: we store only a SHA-256 HASH of the token, never the token itself (same idea as password
+  // hashing). The real token is shown to the organizer ONCE, when it is created. If this table ever leaks,
+  // the hashes can't be used to call the API. `unique` also gives us an index to look a token up by its
+  // hash quickly, and makes a duplicate impossible.
   tokenHash: text().notNull().unique(), // a HASH, never the token — like a password
   label: text().notNull(), // "Front door tablet"
+  // Nullable on purpose: null = "never used" / "still active". Both are set later, not on insert.
   lastUsedAt: timestamp({ withTimezone: true }),
+  // Revoke = SOFT delete: we stamp the time instead of deleting the row, so we keep the history
+  // and the API simply refuses any token whose revokedAt is not null.
   revokedAt: timestamp({ withTimezone: true }), // tablets get lost
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
 
+// NEW in class 10 (migration 0005): CHECK-INS. One row = "this ticket was scanned at the door".
+// A ticket with no row here has not been used yet. We store the fact in its own table (instead of a
+// `checkedIn` boolean on `tickets`) so we also keep WHEN and BY WHOM. See lib/check-in.ts for the logic.
 export const checkIns = pgTable('check_ins', {
   id: uuid().primaryKey().defaultRandom(),
   // unique: a ticket gets in once. The database enforces it, not our code —
@@ -185,6 +201,8 @@ export const checkIns = pgTable('check_ins', {
     .unique()
     .references(() => tickets.id, { onDelete: 'cascade' }),
   checkedInAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  // The organizer (auth `user`) whose scan let the person in. No `onDelete` rule = "no action": you
+  // can't delete a user who did check-ins, which keeps the audit trail intact.
   checkedInBy: text()
     .notNull()
     .references(() => user.id),
@@ -233,11 +251,15 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
 }));
 
 export const ticketsRelations = relations(tickets, ({ one }) => ({
+  // NEW: `one(checkIns)` has no `fields`, because the foreign key lives on the OTHER table
+  // (check_ins.ticket_id). Drizzle finds it through checkInsRelations below. Result: a ticket's
+  // `checkIn` is the row, or null when the ticket hasn't been scanned yet.
   checkIn: one(checkIns),
   order: one(orders, { fields: [tickets.orderId], references: [orders.id] }),
   ticketType: one(ticketTypes, { fields: [tickets.ticketTypeId], references: [ticketTypes.id] }),
 }));
 
+// The other side of the ticket <-> check-in pair. THIS side owns the foreign key, so it spells out `fields`.
 export const checkInsRelations = relations(checkIns, ({ one }) => ({
   ticket: one(tickets, { fields: [checkIns.ticketId], references: [tickets.id] }),
 }));
@@ -248,8 +270,8 @@ export const checkInsRelations = relations(checkIns, ({ one }) => ({
 export type Category = typeof categories.$inferSelect;
 export type Venue = typeof venues.$inferSelect;
 // Renamed in class 04 (it was `Event`): this is the type of a plain `events` ROW.
-// Heads-up: types/gatherly-event.ts and mocks/mock-events.ts still import the old name
-// `Event`, which is why `npm run typecheck` reports errors. They're unused leftovers now.
+// Heads-up: types/gatherly-event.ts still refers to the old name `Event` (see the note there). It is an
+// unused leftover.
 export type GatherlyEvent = typeof events.$inferSelect;
 
 export type TicketType = typeof ticketTypes.$inferSelect;

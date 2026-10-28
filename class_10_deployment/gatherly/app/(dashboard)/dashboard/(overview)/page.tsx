@@ -17,11 +17,14 @@
  * What is real and what is still a placeholder:
  *   ✅ the page is only for organizers and admins
  *   ✅ "New event" opens a real form (app/actions/events.ts)
+ *   ✅ the list is limited to THIS organizer's events (getOrganizerEvents filters by owner)
+ *   ✅ Publish/Unpublish call the setEventStatus Server Action, which checks ownership
  *   🚧 "Signed in as JohnDoe" is still hard-coded: it should print `organizer.name`
- *   🚧 getOrganizerEvents(organizer.id) gets the id, but the QUERY ignores it, so you see
- *      everyone's events (see db/queries/dashboard.ts: a data leak to fix)
- *   🚧 <form action=""> around Publish/Unpublish does nothing yet. A Server Action goes there,
- *      and it must check that the event BELONGS to the signed-in organizer.
+ *
+ * NEW in class 10: a "Check-in scanner tokens" section at the bottom. An organizer creates a token
+ * for a device (a tablet at the door); the device then calls the check-in API with it instead of a
+ * login. See lib/api-tokens.ts and app/actions/api-tokens.ts. The stats panel also gained a
+ * "Checked in" tile (see @stats/page.tsx).
  *
  * Because it reads the cookie (through requireOrganizer), the page is rendered on every request:
  * Next.js can't prerender something that depends on who is asking.
@@ -40,6 +43,8 @@ import CreateScannerToken from './_components/create-scanner-token';
 export default async function DashboardPage() {
   // The guard. Everything below runs only for a signed-in organizer or admin.
   const organizer = await requireOrganizer('/dashboard');
+  // The events and the tokens don't depend on each other, so they load in parallel with Promise.all
+  // (not one after the other). Both queries filter by `organizer.id`: you only ever see your own rows.
   const [events, tokens] = await Promise.all([
     getOrganizerEvents(organizer.id),
     getApiTokens(organizer.id),
@@ -50,6 +55,7 @@ export default async function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-brand-900">Your events</h1>
+          {/* Placeholder: should be `organizer.name`. */}
           <p className="text-sm text-muted-foreground">Signed in as JohnDoe</p>
         </div>
         <Link href="/dashboard/events/new" className={buttonVariants()}>
@@ -80,7 +86,9 @@ export default async function DashboardPage() {
               </div>
               {/* Filled badge for published, softer one for everything else. */}
               <Badge variant={isPublished ? 'default' : 'secondary'}>{event.status}</Badge>
-              {/* Placeholder form (see the notes at the top of the file). */}
+              {/* A form whose `action` is a Server Action. `.bind(null, id, status)` pre-fills the arguments,
+                  so the action receives (eventId, newStatus). Those values travel to the server like any
+                  input, which is why setEventStatus re-validates them and checks the event is yours. */}
               <form
                 action={setEventStatus.bind(null, event.id, isPublished ? 'draft' : 'published')}
               >
@@ -93,15 +101,20 @@ export default async function DashboardPage() {
         })}
       </ul>
 
+      {/* NEW: scanner API tokens. The token list comes from the server; the creation form is a
+          Client Component (it needs useActionState to show the one-time token). */}
       <section className="mt-10">
         <h2 className="text-lg font-semibold text-brand-900">Check-in scanner tokens</h2>
         <CreateScannerToken />
+        {/* Only render the list if there is something to list. We select safe columns only: the
+            query never returns tokenHash, and the plain token isn't stored anywhere to show. */}
         {tokens.length > 0 && (
           <ul className="mt-4 divide-y divide-border rounded-card border border-border text-sm">
             {tokens.map((token) => (
               <li key={token.id} className="flex justify-between gap-4 p-3">
                 <span className="font-medium">{token.label}</span>
                 <span className="text-muted-foreground">
+                  {/* Status: revoked wins over last-used; a never-used token is a hint it may be forgotten. */}
                   {token.revokedAt
                     ? 'revoked'
                     : token.lastUsedAt

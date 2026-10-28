@@ -80,8 +80,8 @@ export async function reserveTicket(ticketTypeId: string): Promise<ReservedResul
       return { ok: false, error: `This event isn't for sale` };
     }
 
-    // How many seats are taken: tickets of this type whose ORDER is not canceled. (Careful with the
-    // spelling: order statuses use 'canceled', one l. Event statuses use 'cancelled', two.)
+    // How many seats are taken: tickets of this type whose ORDER is not cancelled. (A pending, unpaid order
+    // still holds its seat. Spelling: in this version events AND orders both use 'cancelled', two l's.)
     const [sold] = await tx
       .select({ n: count() })
       .from(tickets)
@@ -95,7 +95,8 @@ export async function reserveTicket(ticketTypeId: string): Promise<ReservedResul
 
     // One purchase = one ORDER (who, which event, how much) plus one TICKET row per seat.
     // The user comes from the session; the amount from the database row, never from the browser.
-    // (The order keeps the default status 'pending': there is no payment step yet.)
+    // (The order keeps the default status 'pending': the user pays it afterwards on /my-tickets/[orderId]/pay,
+    // which calls payOrder() in app/actions/orders.ts.)
     const [order] = await tx
       .insert(orders)
       .values({

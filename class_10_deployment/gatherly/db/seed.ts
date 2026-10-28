@@ -33,6 +33,8 @@ import {
   venues,
   type OrderStatus,
 } from './schema';
+// The Postgres driver's connection pool. (In class 9 this was an odd auto-import from
+// '@/node_modules/@types/pg', which is only the type package. The real package is 'pg'.)
 import { Pool } from 'pg';
 
 loadEnvConfig(process.cwd());
@@ -343,6 +345,8 @@ function randomAttendees() {
 }
 
 // Mostly paid, with a few of every other status so the order screens have something to show.
+// 'cancelled' (two l's) must match the `order_status` enum exactly: since migration 0006 the
+// database no longer accepts the old 'canceled'. The `OrderStatus[]` type makes TypeScript check it.
 const orderStatuses: OrderStatus[] = [
   'paid',
   'paid',
@@ -366,6 +370,9 @@ async function seed() {
     // is never left half-empty after the deletes.
     await db.transaction(async (tx) => {
       // Children before parents, or the foreign keys refuse.
+      // `check_ins` and `api_tokens` (class 10) aren't listed: both foreign keys are `onDelete:
+      // 'cascade'`, so deleting tickets (below) removes their check-ins, and deleting users removes
+      // their API tokens. Remove the cascade and this script would start failing here.
       await tx.delete(tickets);
       await tx.delete(orders);
       await tx.delete(ticketTypes);

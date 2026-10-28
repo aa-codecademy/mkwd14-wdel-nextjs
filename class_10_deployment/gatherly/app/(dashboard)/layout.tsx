@@ -1,9 +1,12 @@
 import Link from 'next/link';
 import { type ReactNode } from 'react';
 
-// The organizer app's chrome: a sidebar, no marketing header or footer.
+// LAYOUT of the (dashboard) ROUTE GROUP: the organizer app's chrome, a sidebar with no marketing
+// header or footer. The group name in parentheses is not part of the URL, so this layout wraps
+// /dashboard, /dashboard/events/new and /dashboard/check-in alike.
 // Navigating between (marketing) and (dashboard) swaps the whole layout;
-// navigating inside one keeps it mounted.
+// navigating inside one keeps it mounted (the sidebar doesn't re-render or lose state).
+// New in class 10: the "Check-in" link below, the door-scanning page for event day.
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
@@ -11,6 +14,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <Link href="/dashboard" className="text-lg font-bold text-brand-900">
           Gatherly <span className="text-sm font-normal text-muted-foreground">for organizers</span>
         </Link>
+        {/* Plain <Link>s: client-side navigation, and Next prefetches them when they scroll into view. */}
         <nav className="mt-8 flex flex-col gap-2 text-sm">
           <Link href="/dashboard" className="hover:text-brand-500">
             Your events
@@ -26,6 +30,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </Link>
         </nav>
       </aside>
+      {/* `children` is whichever page matches the URL, swapped in while the sidebar stays put. */}
       <main className="flex-1 p-8">{children}</main>
     </div>
   );
