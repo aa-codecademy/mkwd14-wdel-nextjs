@@ -36,6 +36,20 @@
       "when": 1792428960825,
       "tag": "0004_petite_penance",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793208463769,
+      "tag": "0005_living_unus",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793211482352,
+      "tag": "0006_messy_centennial",
+      "breakpoints": true
     }
   ]
 }

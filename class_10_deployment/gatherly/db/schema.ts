@@ -39,7 +39,7 @@ export const eventStatus = pgEnum('event_status', ['draft', 'published', 'cancel
 // The lifecycle of an ORDER. Heads-up on spelling: events use 'cancelled' (two l's) but orders use
 // 'canceled' (one l). Both are valid English, and mixing them is an easy typo trap, so copy them
 // exactly when you write code that compares or inserts these values.
-export const orderStatus = pgEnum('order_status', ['pending', 'paid', 'refunded', 'canceled']);
+export const orderStatus = pgEnum('order_status', ['pending', 'paid', 'refunded', 'cancelled']);
 
 export const categories = pgTable('categories', {
   id: uuid().primaryKey().defaultRandom(),
@@ -164,6 +164,32 @@ export const tickets = pgTable('tickets', {
   attendeeName: text().notNull(),
 });
 
+export const apiTokens = pgTable('api_tokens', {
+  id: uuid().primaryKey().defaultRandom(),
+  organizerId: text()
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  tokenHash: text().notNull().unique(), // a HASH, never the token — like a password
+  label: text().notNull(), // "Front door tablet"
+  lastUsedAt: timestamp({ withTimezone: true }),
+  revokedAt: timestamp({ withTimezone: true }), // tablets get lost
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
+export const checkIns = pgTable('check_ins', {
+  id: uuid().primaryKey().defaultRandom(),
+  // unique: a ticket gets in once. The database enforces it, not our code —
+  // so two scanners scanning the same ticket at the same moment can't both win.
+  ticketId: uuid()
+    .notNull()
+    .unique()
+    .references(() => tickets.id, { onDelete: 'cascade' }),
+  checkedInAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  checkedInBy: text()
+    .notNull()
+    .references(() => user.id),
+});
+
 // RELATIONS — tell Drizzle how tables connect, so we can load related rows in ONE query:
 //   db.query.events.findMany({ with: { venue: true, organizer: true } })
 // This is only for Drizzle's query API. It does NOT change the database. The real constraints
@@ -207,8 +233,13 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
 }));
 
 export const ticketsRelations = relations(tickets, ({ one }) => ({
+  checkIn: one(checkIns),
   order: one(orders, { fields: [tickets.orderId], references: [orders.id] }),
   ticketType: one(ticketTypes, { fields: [tickets.ticketTypeId], references: [ticketTypes.id] }),
+}));
+
+export const checkInsRelations = relations(checkIns, ({ one }) => ({
+  ticket: one(tickets, { fields: [checkIns.ticketId], references: [tickets.id] }),
 }));
 
 // TYPES inferred from the tables above. `$inferSelect` = the shape of a row we READ.

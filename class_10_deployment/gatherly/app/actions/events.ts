@@ -30,15 +30,17 @@
 import { z } from 'zod';
 // `db` is marked `server-only`. That's fine here: this file only ever runs on the server.
 import { db } from '../../db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { eventCategories, events, ticketTypes, venues } from '../../db/schema';
-// The real session now (class 9): the demo-user file is gone. `getCurrentUser()` returns the signed-in user, or null.
-// (`requireOrganizer()` would also check the role, see the note in step 1 below.)
+// ⚠️ Still the "pretend login" from class 6 (see db/demo-users.ts). Real sign-in exists now (class 7), but
+// this action hasn't been switched over yet, and demo-users.ts no longer compiles (the `users` table
+// is gone). Replace it with `requireOrganizer()` from lib/session.ts. See the class 07 README.
 // redirect(): send the browser to another page. See the end of createEvent.
 import { redirect } from 'next/navigation';
 // revalidatePath(): tell Next.js that a page's data is out of date. See the end of createEvent.
 import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from '../../lib/session';
+import { canManageEvents, parseRole } from '../../lib/roles';
 
 // STEP 1 of the design: describe what a VALID form looks like, once, as a Zod schema.
 // Every value in a FormData is a STRING (or a File), so most fields use `z.coerce.*` to convert
@@ -100,12 +102,11 @@ export async function createEvent(
   _prev: CreateEventState,
   formData: FormData,
 ): Promise<CreateEventState> {
-  // 1. AUTHENTICATE: who is asking? The session says so. The owner of the new event is THIS user, taken from
-  //    the server (never from a form field). A page-level check never covers an action: the proxy and the
-  //    page protect the PAGE, and this function is its own public endpoint, so it checks by itself.
-  //    ⚠️ Two gaps remain: it only checks that SOMEONE is signed in, not their ROLE (a signed-in attendee
-  //    could post here directly), and a missing user THROWS, which shows the error page. The stronger
-  //    version is `const organizer = await requireOrganizer('/dashboard/events/new');` (role + redirect).
+  // 1. AUTHENTICATE + AUTHORIZE: who is asking, and may they do this? Today: a fixed demo organizer.
+  //    The real version is one line:  `const organizer = await requireOrganizer('/dashboard/events/new');`
+  //    It reads the session from the cookie, and sends anyone who isn't a signed-in organizer away.
+  //    Until then, NOBODY is checked: this endpoint, as a public POST, accepts anyone. (The proxy and
+  //    the page only protect the PAGE, not this action. A page-level check never covers the actions.)
   const organizer = await getCurrentUser();
 
   if (!organizer) {
@@ -142,8 +143,8 @@ export async function createEvent(
 
   // From here on `parsed.data` is CLEAN and TYPED: real Date objects, real numbers, real arrays.
   // Split off the pieces that don't go into the `events` table as they are.
-  // `price` and `quantity` become the event's first TICKET TYPE (inserted below, in the transaction).
-  // The `events` row itself only keeps the lowest price (`minPriceCents`).
+  // (⚠️ `quantity` is read but not used yet: it will become the number of tickets in the
+  //  `ticket_types` table, which this action doesn't fill in this version. ESLint reports it.)
   const { price, quantity, categoryIds, ...input } = parsed.data;
 
   // 4. AUTHORIZE / CHECK THE WORLD: the shape of `venueId` is valid, but does that venue exist?
@@ -182,9 +183,6 @@ export async function createEvent(
     // transaction makes it roll back.
     if (!insertedEvent) throw new Error('Issue while creating event');
 
-    // A single default ticket type, built from the form's price and quantity, so the event can sell tickets right
-    // away (the Reserve buttons from class 7 read these rows). Inside the same transaction: the event, its ticket
-    // type and its categories are created together or not at all.
     await tx
       .insert(ticketTypes)
       .values({ eventId: insertedEvent.id, name: 'General admission', priceCents, quantity });
@@ -231,4 +229,38 @@ async function uniqueSlug(title: string) {
 
   // `crypto.randomUUID()` is built into Node.js and the browser; the first 6 characters are plenty.
   return taken ? `${base}-${crypto.randomUUID().slice(0, 6)}` : base;
+}
+
+export async function setEventStatus(eventId: string, status: 'draft' | 'published') {
+  const user = await getCurrentUser();
+  if (!user || !canManageEvents(user.role)) {
+    return;
+  }
+
+  const input = z.object({ eventId: z.uuid(), status: z.enum(['draft', 'published']) }).safeParse({
+    eventId,
+    status,
+  });
+
+  if (!input.success) {
+    return;
+  }
+
+  const isAdmin = parseRole(user.role) === 'admin';
+
+  const [updated] = await db
+    .update(events)
+    .set({ status: input.data.status })
+    .where(
+      isAdmin
+        ? eq(events.id, input.data.eventId)
+        : and(eq(events.id, input.data.eventId), eq(events.organizerId, user.id)),
+    )
+    .returning({ slug: events.slug });
+
+  if (!updated) {
+    return;
+  }
+
+  revalidatePath('/dashboard');
 }

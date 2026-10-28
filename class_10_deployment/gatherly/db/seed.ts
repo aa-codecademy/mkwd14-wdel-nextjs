@@ -33,7 +33,7 @@ import {
   venues,
   type OrderStatus,
 } from './schema';
-import { Pool } from '@/node_modules/@types/pg';
+import { Pool } from 'pg';
 
 loadEnvConfig(process.cwd());
 
@@ -350,7 +350,7 @@ const orderStatuses: OrderStatus[] = [
   'paid',
   'pending',
   'refunded',
-  'canceled',
+  'cancelled',
 ];
 
 /** Find the inserted row that a piece of seed data refers to. */

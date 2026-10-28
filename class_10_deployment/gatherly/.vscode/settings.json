@@ -8,5 +8,6 @@
   "typescript.enablePromptUseWorkspaceTsdk": true,
   "files.eol": "\n",
   "chat.useAgentsMdFile": false,
-  "chat.useClaudeMdFile": false
+	"chat.useClaudeMdFile": false,
+	"chat.disableAIFeatures": false
 }

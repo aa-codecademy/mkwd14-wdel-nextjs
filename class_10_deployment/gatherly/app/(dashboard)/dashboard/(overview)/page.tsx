@@ -1,27 +1,30 @@
 /**
- * ROUTE: /dashboard   — the main part (`children`) of the organizer overview.
+ * ROUTE: /dashboard   — the organizer's list of their events.
  *
- * It sits inside the layout next to the parallel slots (see layout.tsx): the number tiles, recent
- * orders and attendees come from `@stats`, `@orders` and `@attendees`, and THIS page renders the
- * list of the organizer's events below them.
+ * A Server Component, wrapped by the sidebar layout of the (dashboard) route group. Since class 7
+ * it is PROTECTED:
  *
  *   const organizer = await requireOrganizer('/dashboard');
  *
- * That first line is the guard (lib/session.ts), explained in the class 07 README:
- *   not signed in           -> redirect to /sign-in?next=/dashboard
+ * That first line is the guard (lib/session.ts). It reads the session cookie, asks the database who
+ * you are, and then:
+ *   not signed in           -> redirect to /sign-in?next=/dashboard   (you come back after logging in)
  *   signed in, attendee     -> redirect to /organizers-only
  *   signed in, organizer    -> carries on, and returns the user, so we can use `organizer.id`
+ * proxy.ts also bounces visitors without a cookie before the page runs, but that is only a quick
+ * first filter. This line is the real lock.
  *
  * What is real and what is still a placeholder:
  *   ✅ the page is only for organizers and admins
- *   ✅ the list is limited to THIS organizer's events (getOrganizerEvents filters by owner now, so
- *      the data leak of class 7 is closed)
  *   ✅ "New event" opens a real form (app/actions/events.ts)
  *   🚧 "Signed in as JohnDoe" is still hard-coded: it should print `organizer.name`
+ *   🚧 getOrganizerEvents(organizer.id) gets the id, but the QUERY ignores it, so you see
+ *      everyone's events (see db/queries/dashboard.ts: a data leak to fix)
  *   🚧 <form action=""> around Publish/Unpublish does nothing yet. A Server Action goes there,
  *      and it must check that the event BELONGS to the signed-in organizer.
  *
- * It lives in the `(overview)` route group, so the URL is still just /dashboard.
+ * Because it reads the cookie (through requireOrganizer), the page is rendered on every request:
+ * Next.js can't prerender something that depends on who is asking.
  */
 import Link from 'next/link';
 // `buttonVariants` gives a <Link> the LOOK of a button (see components/ui/button.tsx):
@@ -29,13 +32,18 @@ import Link from 'next/link';
 import { Button, buttonVariants } from '../../../../components/ui/button';
 import { formatEventDate } from '../../../../lib/format';
 import { Badge } from '../../../../components/ui/badge';
-import { getOrganizerEvents } from '../../../../db/queries/dashboard';
+import { getApiTokens, getOrganizerEvents } from '../../../../db/queries/dashboard';
 import { requireOrganizer } from '../../../../lib/session';
+import { setEventStatus } from '../../../actions/events';
+import CreateScannerToken from './_components/create-scanner-token';
 
 export default async function DashboardPage() {
   // The guard. Everything below runs only for a signed-in organizer or admin.
   const organizer = await requireOrganizer('/dashboard');
-  const events = await getOrganizerEvents(organizer.id);
+  const [events, tokens] = await Promise.all([
+    getOrganizerEvents(organizer.id),
+    getApiTokens(organizer.id),
+  ]);
 
   return (
     <div>
@@ -73,7 +81,9 @@ export default async function DashboardPage() {
               {/* Filled badge for published, softer one for everything else. */}
               <Badge variant={isPublished ? 'default' : 'secondary'}>{event.status}</Badge>
               {/* Placeholder form (see the notes at the top of the file). */}
-              <form action="">
+              <form
+                action={setEventStatus.bind(null, event.id, isPublished ? 'draft' : 'published')}
+              >
                 <Button variant="outline" size="sm" type="submit">
                   {isPublished ? 'Unpublish' : 'Publish'}
                 </Button>
@@ -82,6 +92,27 @@ export default async function DashboardPage() {
           );
         })}
       </ul>
+
+      <section className="mt-10">
+        <h2 className="text-lg font-semibold text-brand-900">Check-in scanner tokens</h2>
+        <CreateScannerToken />
+        {tokens.length > 0 && (
+          <ul className="mt-4 divide-y divide-border rounded-card border border-border text-sm">
+            {tokens.map((token) => (
+              <li key={token.id} className="flex justify-between gap-4 p-3">
+                <span className="font-medium">{token.label}</span>
+                <span className="text-muted-foreground">
+                  {token.revokedAt
+                    ? 'revoked'
+                    : token.lastUsedAt
+                      ? `last used ${formatEventDate(token.lastUsedAt)}`
+                      : 'never used'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

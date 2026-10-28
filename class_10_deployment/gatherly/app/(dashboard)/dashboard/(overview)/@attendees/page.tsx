@@ -1,9 +1,3 @@
-/**
- * SLOT @attendees — "Attendees": the people with a PAID ticket for the organizer's events.
- *
- * Same pattern as the other slots: guard, an owner-filtered query (getRecentAttendees), an empty state.
- * Only orders with status 'paid' count, so an unpaid reservation is not listed as an attendee.
- */
 import { getRecentAttendees } from '../../../../../db/queries/dashboard';
 import { requireOrganizer } from '../../../../../lib/session';
 
@@ -22,7 +16,6 @@ export default async function AttendeesSlot() {
             <li key={row.ticketId} className="p-3">
               <p className="font-medium">
 								{row.attendee}
-								{/* Commented out: a "checked in" tick that needs a check-in table, which doesn't exist yet. */}
 								{/* {row.checkedInAt && <span title="Checked in">✓</span>} */}
               </p>
               <p className="text-muted-foreground">

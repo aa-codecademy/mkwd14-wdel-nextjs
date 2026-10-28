@@ -1,12 +1,3 @@
-/**
- * shadcn/ui Dialog — added in class 9 with `npx shadcn@latest add dialog`, for the tickets modal.
- * Same recipe as the other components in this folder (see button.tsx): a Base UI primitive for the behaviour
- * and accessibility (focus trap, Escape, overlay, scroll lock), Tailwind classes for the look, merged with cn().
- *
- * It's a set of parts you compose: <Dialog> (the state), <DialogContent> (the box, with the overlay and the
- * close button), <DialogTitle> and <DialogDescription>, <DialogHeader>, <DialogFooter>, <DialogTrigger>.
- * A Client Component ('use client' below), because it handles focus and keyboard events.
- */
 "use client"
 
 import * as React from "react"

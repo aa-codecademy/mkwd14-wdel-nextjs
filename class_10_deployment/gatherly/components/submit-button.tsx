@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * SubmitButton — a submit button that knows when its form is being submitted.
  *

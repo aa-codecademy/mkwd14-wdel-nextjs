@@ -86,7 +86,7 @@ export async function reserveTicket(ticketTypeId: string): Promise<ReservedResul
       .select({ n: count() })
       .from(tickets)
       .innerJoin(orders, eq(orders.id, tickets.orderId))
-      .where(and(eq(tickets.ticketTypeId, type.id), ne(orders.status, 'canceled')));
+      .where(and(eq(tickets.ticketTypeId, type.id), ne(orders.status, 'cancelled')));
 
     // Sold out? `sold?.n ?? 0` = 0 if the query returned no row (noUncheckedIndexedAccess).
     if ((sold?.n ?? 0) >= type.quantity) {

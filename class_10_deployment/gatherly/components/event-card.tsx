@@ -84,9 +84,6 @@ export function EventCard({ event }: { event: EventWithDetails }) {
         {/* e.g. "From €49.00" or "Free" */}
         <p className="font-semibold">{formatPrice(event.minPriceCents)}</p>
         <div className="flex items-center gap-2">
-          {/* New in class 9: this link goes to /events/<slug>/tickets. Clicked from this page it is INTERCEPTED and shown
-              as a modal (app/(marketing)/@modal/...), a refresh of that URL shows the full page. `buttonVariants` gives
-              the <Link> the look of a small button. */}
           <Link href={`/events/${event.slug}/tickets`} className={buttonVariants({ size: 'sm' })}>
             Get tickets
           </Link>

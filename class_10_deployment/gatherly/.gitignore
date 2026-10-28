@@ -33,13 +33,11 @@ yarn-error.log*
 # env files: .env holds secrets (database password) and must NEVER be committed.
 # The template `.env.example` IS committed. Everyone copies it to their own `.env`.
 .env
-# `vercel env pull` writes a local env file with your project's variables (possibly .env.local): also secret,
-# so it must never be committed either.
+# `vercel env pull` writes a local env file (possibly .env.local): also secret, never commit it.
 .env.local
 .env.*.local
 
 # vercel
-# The `.vercel` folder links this directory to a Vercel project (ids only). It's local, so it's ignored.
 .vercel
 
 # typescript

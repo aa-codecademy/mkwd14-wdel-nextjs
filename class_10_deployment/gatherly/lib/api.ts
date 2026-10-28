@@ -18,9 +18,6 @@
  * client sees "success" with an error inside. Pass it as the 2nd argument instead:
  *   return Response.json({ error: { code, message, ...(details ? { details } : {}) } }, { status });
  */
-// ⚠️ Leftover auto-import: `error` from Node's 'console' module isn't used anywhere (ESLint reports it).
-// Delete this line.
-import { error } from 'console';
 
 // `details?: unknown` = anything (we use Zod's field errors). The spread `...(details ? { details } : {})`
 // adds the `details` key ONLY when there is something to say, so the JSON has no `"details": null`.

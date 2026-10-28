@@ -40,6 +40,9 @@ export function AccountMenu() {
   return (
     <div className="flex items-center gap-4">
       {/* The role comes with the session, typed thanks to `adminClient()` in lib/auth-client.ts. */}
+      <Link href="/my-tickets" className="hover:text-brand-500">
+        My tickets
+      </Link>
       {canManageEvents(session.user.role) && (
         <Link href="/dashboard" className="hover:text-brand-500">
           Dashboard
